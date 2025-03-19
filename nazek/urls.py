@@ -1,9 +1,7 @@
 from django.contrib import admin
-from django.urls import path, include  # Ajout de include
-from django.http import HttpResponseRedirect
+from django.urls import path, include
 
 urlpatterns = [
-    path('', lambda request: HttpResponseRedirect('/appointments/list/')),
-    path('admin/', admin.site.urls),  # URL pour l'administration Django
-    path('appointments/', include('appointments.urls')),  # URL pour l'application appointments
+    path("admin/", admin.site.urls),
+    path("api/", include("appointments.urls")),  # Assure-toi que tout passe bien par /api/
 ]
