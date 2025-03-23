@@ -1,87 +1,143 @@
 import React, { useEffect, useState } from 'react';
-import Spinner from 'react-bootstrap/Spinner';
+import { useNavigate } from 'react-router-dom';
+import { Form, Button, Card, Alert, Spinner, Row, Col } from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCalendar, faClock, faMapMarkerAlt, faInfoCircle, faUserTie } from '@fortawesome/free-solid-svg-icons';
 import api from '../api';
-
-interface Client {
-  id: number;
-  name: string;
-}
-
-interface Employer {
-  id: number;
-  name: string;
-  service: string;
-}
+import { Service, Employer, Availability } from '../types';
 
 const CreateAppointment: React.FC = () => {
-  const [clients, setClients] = useState<Client[]>([]);
+  const navigate = useNavigate();
+  const [services, setServices] = useState<Service[]>([]);
   const [employers, setEmployers] = useState<Employer[]>([]);
+  const [selectedService, setSelectedService] = useState<number | null>(null);
+  const [selectedEmployer, setSelectedEmployer] = useState<number | null>(null);
+  const [employerAvailabilities, setEmployerAvailabilities] = useState<Availability[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
-    client: '',
-    employer: '',
     date: '',
+    time: '',
     description: '',
-    payment_method: 'carte',
-    total_amount: 0,
+    location: '',
+    estimated_duration: 60,
+    payment_method: 'especes',
   });
 
-  // Charger la liste des clients et employeurs
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchServices = async () => {
       try {
-        const [clientsResponse, employersResponse] = await Promise.all([
-          api.get<Client[]>('/clients/'),
-          api.get<Employer[]>('/employers/'),
-        ]);
-
-        if (clientsResponse.data.length === 0 || employersResponse.data.length === 0) {
-          setError('Aucun client ou employeur disponible.');
-        } else {
-          setClients(clientsResponse.data);
-          setEmployers(employersResponse.data);
-        }
-      } catch (error) {
-        setError('Erreur lors du chargement des données.');
-      } finally {
-        setLoading(false);
+        const response = await api.get('/services/');
+        setServices(response.data);
+      } catch (err) {
+        setError('Erreur lors du chargement des services');
       }
     };
-    fetchData();
+    fetchServices();
   }, []);
 
-  // Gestion des changements dans le formulaire
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+  useEffect(() => {
+    const fetchEmployers = async () => {
+      if (selectedService) {
+        try {
+          const response = await api.get(`/employers/?service=${selectedService}`);
+          setEmployers(response.data);
+        } catch (err) {
+          setError('Erreur lors du chargement des employeurs');
+        }
+      }
+    };
+    fetchEmployers();
+  }, [selectedService]);
+
+  useEffect(() => {
+    const fetchAvailabilities = async () => {
+      if (selectedEmployer) {
+        try {
+          const response = await api.get(`/employers/${selectedEmployer}/availability/`);
+          setEmployerAvailabilities(response.data);
+          generateTimeSlots(response.data);
+        } catch (err) {
+          setError('Erreur lors du chargement des disponibilités');
+        }
+      }
+    };
+    fetchAvailabilities();
+  }, [selectedEmployer]);
+
+  const generateTimeSlots = (availabilities: Availability[]) => {
+    const slots: string[] = [];
+    availabilities.forEach(availability => {
+      const start = new Date(`1970-01-01T${availability.start_time}`);
+      const end = new Date(`1970-01-01T${availability.end_time}`);
+      let current = new Date(start);
+
+      while (current < end) {
+        slots.push(current.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+        current.setMinutes(current.getMinutes() + 30);
+      }
+    });
+    setAvailableTimeSlots(slots);
   };
 
-  // Gestion de la soumission du formulaire
+  const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const serviceId = parseInt(e.target.value);
+    setSelectedService(serviceId);
+    setSelectedEmployer(null);
+    setFormData({ ...formData, date: '', time: '' });
+  };
+
+  const handleEmployerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const employerId = parseInt(e.target.value);
+    setSelectedEmployer(employerId);
+    setFormData({ ...formData, date: '', time: '' });
+  };
+
+  const validateForm = () => {
+    if (!selectedService || !selectedEmployer || !formData.date || !formData.time) {
+      setError('Veuillez remplir tous les champs obligatoires');
+      return false;
+    }
+
+    const selectedDate = new Date(`${formData.date}T${formData.time}`);
+    if (selectedDate < new Date()) {
+      setError('La date et l\'heure doivent être dans le futur');
+      return false;
+    }
+
+    if (!formData.location) {
+      setError('Veuillez spécifier l\'adresse du rendez-vous');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
+
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      const response = await api.post('/appointments/create/', formData);
-      setSuccessMessage('Rendez-vous créé avec succès ! 🎉');
-      setFormData({
-        client: '',
-        employer: '',
-        date: '',
-        description: '',
-        payment_method: 'carte',
-        total_amount: 0,
-      });
-    } catch (error) {
-      setError("Erreur lors de la création du rendez-vous. Veuillez réessayer.");
+      const dateTime = new Date(`${formData.date}T${formData.time}`);
+      const appointmentData = {
+        ...formData,
+        employer: selectedEmployer,
+        service: selectedService,
+        date: dateTime.toISOString(),
+      };
+
+      const response = await api.post('/appointments/create/', appointmentData);
+      setSuccessMessage('Rendez-vous créé avec succès ! Vous serez notifié de la réponse de l\'employeur.');
+      setTimeout(() => navigate('/client/profile'), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erreur lors de la création du rendez-vous');
     } finally {
       setLoading(false);
     }
@@ -89,106 +145,183 @@ const CreateAppointment: React.FC = () => {
 
   return (
     <div className="container mt-5">
-      <h1 className="text-center mb-4">Créer un Rendez-vous</h1>
+      <Card className="shadow-sm">
+        <Card.Header className="bg-primary text-white">
+          <h2 className="mb-0">
+            <FontAwesomeIcon icon={faCalendar} className="me-2" />
+            Créer un Rendez-vous
+          </h2>
+        </Card.Header>
+        <Card.Body>
+          {error && <Alert variant="danger">{error}</Alert>}
+          {successMessage && <Alert variant="success">{successMessage}</Alert>}
 
-      {error && <div className="alert alert-danger">{error}</div>}
-      {successMessage && <div className="alert alert-success">{successMessage}</div>}
+          <Form onSubmit={handleSubmit}>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>
+                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+                    Service
+                  </Form.Label>
+                  <Form.Select
+                    value={selectedService || ''}
+                    onChange={handleServiceChange}
+                    required
+                  >
+                    <option value="">Sélectionnez un service</option>
+                    {services.map(service => (
+                      <option key={service.id} value={service.id}>
+                        {service.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
 
-      <form onSubmit={handleSubmit}>
-        <div className="mb-3">
-          <label htmlFor="client" className="form-label">Client</label>
-          <select
-            id="client"
-            name="client"
-            value={formData.client}
-            onChange={handleChange}
-            className="form-select"
-            required
-          >
-            <option value="">Sélectionnez un client</option>
-            {clients.map(client => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-        </div>
+              {selectedService && (
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>
+                      <FontAwesomeIcon icon={faUserTie} className="me-2" />
+                      Prestataire
+                    </Form.Label>
+                    <Form.Select
+                      value={selectedEmployer || ''}
+                      onChange={handleEmployerChange}
+                      required
+                    >
+                      <option value="">Sélectionnez un prestataire</option>
+                      {employers.map(employer => (
+                        <option key={employer.id} value={employer.id}>
+                          {employer.name} - {employer.average_rating.toFixed(1)} ⭐ ({employer.total_reviews} avis)
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              )}
+            </Row>
 
-        <div className="mb-3">
-          <label htmlFor="employer" className="form-label">Employeur</label>
-          <select
-            id="employer"
-            name="employer"
-            value={formData.employer}
-            onChange={handleChange}
-            className="form-select"
-            required
-          >
-            <option value="">Sélectionnez un employeur</option>
-            {employers.map(employer => (
-              <option key={employer.id} value={employer.id}>
-                {employer.name} ({employer.service})
-              </option>
-            ))}
-          </select>
-        </div>
+            {selectedEmployer && (
+              <>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>
+                        <FontAwesomeIcon icon={faCalendar} className="me-2" />
+                        Date
+                      </Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        min={new Date().toISOString().split('T')[0]}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
 
-        <div className="mb-3">
-          <label htmlFor="date" className="form-label">Date et heure</label>
-          <input
-            id="date"
-            type="datetime-local"
-            name="date"
-            value={formData.date}
-            onChange={handleChange}
-            className="form-control"
-            required
-          />
-        </div>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>
+                        <FontAwesomeIcon icon={faClock} className="me-2" />
+                        Heure
+                      </Form.Label>
+                      <Form.Select
+                        value={formData.time}
+                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                        required
+                      >
+                        <option value="">Sélectionnez une heure</option>
+                        {availableTimeSlots.map(slot => (
+                          <option key={slot} value={slot}>
+                            {slot}
+                          </option>
+                        ))}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
 
-        <div className="mb-3">
-          <label htmlFor="description" className="form-label">Description</label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            className="form-control"
-          />
-        </div>
+                <Form.Group className="mb-3">
+                  <Form.Label>
+                    <FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" />
+                    Adresse
+                  </Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    required
+                  />
+                </Form.Group>
 
-        <div className="mb-3">
-          <label htmlFor="payment_method" className="form-label">Mode de paiement</label>
-          <select
-            id="payment_method"
-            name="payment_method"
-            value={formData.payment_method}
-            onChange={handleChange}
-            className="form-select"
-          >
-            <option value="carte">Carte Dahabiya</option>
-            <option value="especes">Espèces</option>
-          </select>
-        </div>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Durée estimée (minutes)</Form.Label>
+                      <Form.Control
+                        type="number"
+                        value={formData.estimated_duration}
+                        onChange={(e) => setFormData({ ...formData, estimated_duration: parseInt(e.target.value) })}
+                        min="30"
+                        step="30"
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
 
-        <div className="mb-3">
-          <label htmlFor="total_amount" className="form-label">Montant total</label>
-          <input
-            id="total_amount"
-            type="number"
-            name="total_amount"
-            value={formData.total_amount}
-            onChange={handleChange}
-            className="form-control"
-            required
-            min="0"
-          />
-        </div>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Mode de paiement</Form.Label>
+                      <Form.Select
+                        value={formData.payment_method}
+                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                      >
+                        <option value="especes">Espèces</option>
+                        <option value="carte">Carte Dahabiya</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
 
-        <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-          {loading ? <Spinner animation="border" size="sm" /> : 'Créer le rendez-vous'}
-        </button>
-      </form>
+                <Form.Group className="mb-3">
+                  <Form.Label>Description</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
+                </Form.Group>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-100"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                      />
+                      <span className="ms-2">Création en cours...</span>
+                    </>
+                  ) : (
+                    'Créer le rendez-vous'
+                  )}
+                </Button>
+              </>
+            )}
+          </Form>
+        </Card.Body>
+      </Card>
     </div>
   );
 };

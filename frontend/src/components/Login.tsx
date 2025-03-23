@@ -1,28 +1,47 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Card, Form, Button, Alert } from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faUser, faLock, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import api from '../api';
 
+interface LocationState {
+  from: {
+    pathname: string;
+  };
+}
+
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as LocationState)?.from?.pathname || '/';
+
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
+    setError(null);
 
     try {
-      const response = await api.post('/auth/login/', { email, password }); // 🔹 Correction ici
+      const response = await api.post('/auth/login/', formData);
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('role', response.data.role);
-
-      // Redirection en fonction du rôle
-      navigate(response.data.role === 'client' ? '/client/profile' : '/employer/profile');
+      navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.response?.data?.error || "Email ou mot de passe incorrect");
+      setError(err.response?.data?.message || 'Erreur lors de la connexion');
     } finally {
       setLoading(false);
     }
@@ -30,36 +49,83 @@ const Login: React.FC = () => {
 
   return (
     <div className="container mt-5">
-      <h2 className="text-center">Connexion</h2>
-      <form onSubmit={handleSubmit} className="card p-4 mx-auto shadow" style={{ maxWidth: '400px' }}>
-        {error && <div className="alert alert-danger">{error}</div>}
+      <div className="row justify-content-center">
+        <div className="col-md-6 col-lg-4">
+          <Button
+            variant="outline-primary"
+            className="mb-4"
+            onClick={() => navigate(-1)}
+          >
+            <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
+            Retour
+          </Button>
 
-        <div className="mb-3">
-          <label className="form-label">Email</label>
-          <input
-            type="email"
-            className="form-control"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+          <Card>
+            <Card.Header className="text-center">
+              <h4 className="mb-0">Connexion</h4>
+            </Card.Header>
+            <Card.Body>
+              {error && (
+                <Alert variant="danger" className="mb-4">
+                  {error}
+                </Alert>
+              )}
+
+              <Form onSubmit={handleSubmit}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <div className="input-group">
+                    <span className="input-group-text">
+                      <FontAwesomeIcon icon={faUser} />
+                    </span>
+                    <Form.Control
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      placeholder="Entrez votre email"
+                    />
+                  </div>
+                </Form.Group>
+
+                <Form.Group className="mb-4">
+                  <Form.Label>Mot de passe</Form.Label>
+                  <div className="input-group">
+                    <span className="input-group-text">
+                      <FontAwesomeIcon icon={faLock} />
+                    </span>
+                    <Form.Control
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      placeholder="Entrez votre mot de passe"
+                    />
+                  </div>
+                </Form.Group>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-100"
+                  disabled={loading}
+                >
+                  {loading ? 'Connexion...' : 'Se connecter'}
+                </Button>
+              </Form>
+
+              <div className="text-center mt-4">
+                <p className="mb-0">
+                  Pas encore de compte ?{' '}
+                  <Link to="/register">Inscrivez-vous</Link>
+                </p>
+              </div>
+            </Card.Body>
+          </Card>
         </div>
-
-        <div className="mb-3">
-          <label className="form-label">Mot de passe</label>
-          <input
-            type="password"
-            className="form-control"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-
-        <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-          {loading ? "Connexion..." : "Se connecter"}
-        </button>
-      </form>
+      </div>
     </div>
   );
 };

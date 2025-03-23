@@ -1,49 +1,72 @@
 """
-Ce fichier contient les urls pour gérer les rendez-vous et l'authentification.
+Ce fichier contient les URLs pour gérer les rendez-vous, les profils et l'authentification.
 """
 
 from django.urls import path
 from .views import (
+    # 🔐 Authentification
+    RegisterView,
+    LoginView,
+    LogoutView,
+    UserProfile,
+
+    # 📅 Rendez-vous
     AppointmentList,
-    AppointmentDetail,
     CreateAppointment,
-    ClientList,
-    ClientProfile,
-    EmployerList,
-    UpdateEmployerProfile,
+    AppointmentDetail,
+    AppointmentReview,
+    AppointmentPayment,
     AddReview,
-    ServiceList,
+
+    # 👤 Clients
+    ClientProfile,
+
+    # 👷 Employeurs
+    EmployerProfile,
+    EmployerUpdate,
+    EmployerAvailability,
+
+    # 🛠️ Services
     ServiceDetail,
-    RegisterUser,
-    LoginUser,
-    LogoutUser,
+
+    # 🔔 Notifications
+    NotificationList,
+    MarkNotificationRead,
+
+    # 💳 Paiement
+    ProcessPayment,
 )
 
 urlpatterns = [
-    # Authentification
-    path("api/auth/register/", RegisterUser.as_view(), name="register"),
-    path("api/auth/login/", LoginUser.as_view(), name="login"),
-    path("api/auth/logout/", LogoutUser.as_view(), name="logout"),
-    # Rendez-vous
-    path("api/appointments/", AppointmentList.as_view(), name="appointments_list"),
-    path(
-        "api/appointments/create/",
-        CreateAppointment.as_view(),
-        name="create_appointment",
-    ),
-    path(
-        "api/appointments/<int:pk>/",
-        AppointmentDetail.as_view(),
-        name="appointment_detail",
-    ),
-    path("api/appointments/<int:pk>/review/", AddReview.as_view(), name="add_review"),
-    # 🔹 Clients
-    path("api/clients/", ClientList.as_view(), name="clients_list"),
-    path("api/clients/me/", ClientProfile.as_view(), name="client_profile"),
-    # Employeurs
-    path("api/employers/", EmployerList.as_view(), name="employer_list"),
-    path("api/employers/me/", UpdateEmployerProfile.as_view(), name="employer_profile"),
-    # Services
-    path("api/services/", ServiceList.as_view(), name="service_list"),
-    path("api/services/<int:pk>/", ServiceDetail.as_view(), name="service_detail"),
+    # 🔐 Authentification
+    path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/login/", LoginView.as_view(), name="login"),
+    path("auth/logout/", LogoutView.as_view(), name="logout"),
+    path("auth/user/", UserProfile.as_view(), name="user_profile"),
+
+    # 📅 Rendez-vous
+    path("appointments/", AppointmentList.as_view(), name="appointment_list"),
+    path("appointments/create/", CreateAppointment.as_view(), name="create_appointment"),
+    path("appointments/<int:pk>/", AppointmentDetail.as_view(), name="appointment_detail"),
+    path("appointments/<int:pk>/review/", AppointmentReview.as_view(), name="appointment_review"),
+    path("appointments/<int:pk>/payment/", AppointmentPayment.as_view(), name="appointment_payment"),
+    path("appointments/<int:pk>/add-review/", AddReview.as_view(), name="add_review"),
+
+    # 👤 Clients
+    path("clients/profile/", ClientProfile.as_view(), name="client_profile"),
+
+    # 👷 Employeurs
+    path("employers/profile/", EmployerProfile.as_view(), name="employer_profile"),
+    path("employers/update/", EmployerUpdate.as_view(), name="employer_update"),
+    path("employers/<int:employer_id>/availabilities/", EmployerAvailability.as_view(), name="employer_availability"),
+
+    # 🛠️ Services
+    path("services/<int:pk>/", ServiceDetail.as_view(), name="service_detail"),
+
+    # 🔔 Notifications
+    path("notifications/", NotificationList.as_view(), name="notification_list"),
+    path("notifications/<int:notification_id>/read/", MarkNotificationRead.as_view(), name="mark_notification_read"),
+
+    # 💳 Paiement
+    path("appointments/<int:appointment_id>/process-payment/", ProcessPayment.as_view(), name="process_payment"),
 ]
