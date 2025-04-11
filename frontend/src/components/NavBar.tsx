@@ -30,7 +30,7 @@ const NavbarComponent: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token');
         if (token) {
           const response = await api.get('/auth/user/');
           setUser(response.data);

@@ -222,19 +222,19 @@ const ProfileClient: React.FC = () => {
                   <thead>
                     <tr>
                       <th>Employeur</th>
-                      <th>Service</th>
-                      <th>Date</th>
-                      <th>Statut</th>
+              <th>Service</th>
+              <th>Date</th>
+              <th>Statut</th>
                       <th>Montant</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
                     {appointments.map(appointment => (
-                      <tr key={appointment.id}>
+              <tr key={appointment.id}>
                         <td>{appointment.employer.name}</td>
                         <td>{appointment.service.name}</td>
-                        <td>{new Date(appointment.date).toLocaleString()}</td>
+                <td>{new Date(appointment.date).toLocaleString()}</td>
                         <td>
                           <Badge bg={
                             appointment.status === 'en_attente' ? 'warning' :
@@ -243,9 +243,9 @@ const ProfileClient: React.FC = () => {
                             appointment.status === 'terminé' ? 'info' :
                             'secondary'
                           }>
-                            {appointment.status}
+                    {appointment.status}
                           </Badge>
-                        </td>
+                </td>
                         <td>{appointment.total_amount} DA</td>
                         <td>
                           {appointment.status === 'terminé' && !appointment.rating && (
@@ -281,11 +281,11 @@ const ProfileClient: React.FC = () => {
                               </Button>
                             </div>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
               </div>
             </Card.Body>
           </Card>

@@ -5,41 +5,15 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const API_VERSION = '/api/v1';
 const AUTH_BASE = `${API_VERSION}/auth`;
 
-// URLs d'authentification
-export const REGISTER_URL = `${AUTH_BASE}/register/`;
-export const LOGIN_URL = `${AUTH_BASE}/login/`;
-export const USER_URL = `${AUTH_BASE}/user/`;
-export const REFRESH_TOKEN_URL = `${AUTH_BASE}/token/refresh/`;
-export const LOGOUT_URL = `${AUTH_BASE}/logout/`;
-
-// URLs des rendez-vous
-export const APPOINTMENTS_URL = `${API_VERSION}/appointments/`;
-export const CREATE_APPOINTMENT_URL = `${API_VERSION}/appointments/create/`;
-export const APPOINTMENT_DETAIL_URL = (id) => `${API_VERSION}/appointments/${id}/`;
-export const APPOINTMENT_REVIEW_URL = (id) => `${API_VERSION}/appointments/${id}/review/`;
-export const APPOINTMENT_PAYMENT_URL = (id) => `${API_VERSION}/appointments/${id}/payment/`;
-export const ADD_REVIEW_URL = (id) => `${API_VERSION}/appointments/${id}/add-review/`;
-
-// URLs des clients et employeurs
-export const CLIENT_PROFILE_URL = `${API_VERSION}/clients/profile/`;
-export const EMPLOYER_PROFILE_URL = `${API_VERSION}/employers/profile/`;
-export const EMPLOYER_UPDATE_URL = `${API_VERSION}/employers/update/`;
-export const EMPLOYER_AVAILABILITY_URL = (id) => `${API_VERSION}/employers/${id}/availabilities/`;
-
-// URLs des services et notifications
-export const SERVICE_DETAIL_URL = (id) => `${API_VERSION}/services/${id}/`;
-export const NOTIFICATIONS_URL = `${API_VERSION}/notifications/`;
-export const MARK_NOTIFICATION_READ_URL = (id) => `${API_VERSION}/notifications/${id}/read/`;
-
+// Configuration de base d'axios
 const api = axios.create({
   baseURL: API_URL,
-  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Intercepteur pour ajouter le token à chaque requête
+// Intercepteur pour ajouter le token d'authentification
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -53,42 +27,140 @@ api.interceptors.request.use(
   }
 );
 
-// Intercepteur pour gérer les erreurs d'authentification et le rafraîchissement du token
+// Intercepteur pour gérer les erreurs
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
+    if (error.response?.status === 401) {
+      // Token expiré, essayer de le rafraîchir
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const response = await api.post('/auth/refresh/', { refresh: refreshToken });
+          localStorage.setItem('token', response.data.access);
+          // Réessayer la requête originale
+          return api(error.config);
         }
-
-        const response = await axios.post(
-          `${API_URL}${REFRESH_TOKEN_URL}`,
-          { refresh: refreshToken },
-          { withCredentials: true }
-        );
-
-        const { access } = response.data;
-        localStorage.setItem('token', access);
-
-        originalRequest.headers.Authorization = `Bearer ${access}`;
-        return api(originalRequest);
       } catch (refreshError) {
+        // Si le rafraîchissement échoue, déconnecter l'utilisateur
         localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('refresh_token');
         window.location.href = '/login';
-        return Promise.reject(refreshError);
       }
     }
-
     return Promise.reject(error);
   }
 );
+
+// Fonction utilitaire pour les requêtes API
+export const apiRequest = async (url, options = {}) => {
+  try {
+    const response = await api({
+      url,
+      ...options,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) {
+      throw new Error(error.response.data.detail || 'Une erreur est survenue');
+    }
+    throw new Error('Erreur de connexion au serveur');
+  }
+};
+
+// URLs de l'API
+export const AUTH_URLS = {
+  LOGIN: '/auth/login/',
+  REGISTER: '/auth/register/',
+  REFRESH: '/auth/refresh/',
+  LOGOUT: '/auth/logout/',
+  USER: '/auth/user/',
+};
+
+export const SERVICE_URLS = {
+  LIST: '/services/',
+  DETAIL: (id) => `/services/${id}/`,
+  CREATE: '/services/',
+  UPDATE: (id) => `/services/${id}/`,
+  DELETE: (id) => `/services/${id}/`,
+};
+
+export const APPOINTMENT_URLS = {
+  LIST: '/appointments/',
+  DETAIL: (id) => `/appointments/${id}/`,
+  CREATE: '/appointments/',
+  UPDATE: (id) => `/appointments/${id}/`,
+  DELETE: (id) => `/appointments/${id}/`,
+};
+
+export const USER_URLS = {
+  PROFILE: '/users/profile/',
+  UPDATE: '/users/update/',
+  CHANGE_PASSWORD: '/users/change-password/',
+};
+
+// Fonctions d'API
+export const authAPI = {
+  login: (credentials) => apiRequest(AUTH_URLS.LOGIN, {
+    method: 'POST',
+    data: credentials,
+  }),
+  register: (userData) => apiRequest(AUTH_URLS.REGISTER, {
+    method: 'POST',
+    data: userData,
+  }),
+  refresh: (refreshToken) => apiRequest(AUTH_URLS.REFRESH, {
+    method: 'POST',
+    data: { refresh: refreshToken },
+  }),
+  logout: () => apiRequest(AUTH_URLS.LOGOUT, {
+    method: 'POST',
+  }),
+  getUser: () => apiRequest(AUTH_URLS.USER),
+};
+
+export const serviceAPI = {
+  list: () => apiRequest(SERVICE_URLS.LIST),
+  detail: (id) => apiRequest(SERVICE_URLS.DETAIL(id)),
+  create: (data) => apiRequest(SERVICE_URLS.CREATE, {
+    method: 'POST',
+    data,
+  }),
+  update: (id, data) => apiRequest(SERVICE_URLS.UPDATE(id), {
+    method: 'PUT',
+    data,
+  }),
+  delete: (id) => apiRequest(SERVICE_URLS.DELETE(id), {
+    method: 'DELETE',
+  }),
+};
+
+export const appointmentAPI = {
+  list: () => apiRequest(APPOINTMENT_URLS.LIST),
+  detail: (id) => apiRequest(APPOINTMENT_URLS.DETAIL(id)),
+  create: (data) => apiRequest(APPOINTMENT_URLS.CREATE, {
+    method: 'POST',
+    data,
+  }),
+  update: (id, data) => apiRequest(APPOINTMENT_URLS.UPDATE(id), {
+    method: 'PUT',
+    data,
+  }),
+  delete: (id) => apiRequest(APPOINTMENT_URLS.DELETE(id), {
+    method: 'DELETE',
+  }),
+};
+
+export const userAPI = {
+  getProfile: () => apiRequest(USER_URLS.PROFILE),
+  updateProfile: (data) => apiRequest(USER_URLS.UPDATE, {
+    method: 'PUT',
+    data,
+  }),
+  changePassword: (data) => apiRequest(USER_URLS.CHANGE_PASSWORD, {
+    method: 'POST',
+    data,
+  }),
+};
 
 export default api;

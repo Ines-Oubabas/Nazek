@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -10,9 +10,18 @@ import {
   Alert,
   Divider,
   Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import {
+  USERS_URL,
+  UPDATE_PROFILE_URL,
+  CHANGE_PASSWORD_URL,
+} from '../services/api';
 
 const Profile = () => {
   const { user, logout } = useAuth();
@@ -44,11 +53,24 @@ const Profile = () => {
     setLoading(true);
 
     try {
-      const response = await api.patch('/api/users/me/', {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        phone: formData.phone,
+      const token = localStorage.getItem('token');
+      const response = await fetch(USERS_URL, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la mise à jour du profil');
+      }
+
       setSuccess('Profil mis à jour avec succès');
     } catch (err) {
       setError('Erreur lors de la mise à jour du profil');
@@ -69,10 +91,23 @@ const Profile = () => {
     setLoading(true);
 
     try {
-      await api.post('/api/users/change-password/', {
-        current_password: formData.currentPassword,
-        new_password: formData.newPassword,
+      const token = localStorage.getItem('token');
+      const response = await fetch(CHANGE_PASSWORD_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: formData.currentPassword,
+          new_password: formData.newPassword,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors du changement de mot de passe');
+      }
+
       setSuccess('Mot de passe modifié avec succès');
       setFormData(prev => ({
         ...prev,
@@ -90,7 +125,18 @@ const Profile = () => {
   const handleDeleteAccount = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.')) {
       try {
-        await api.delete('/api/users/me/');
+        const token = localStorage.getItem('token');
+        const response = await fetch(USERS_URL, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Erreur lors de la suppression du compte');
+        }
+
         logout();
       } catch (err) {
         setError('Erreur lors de la suppression du compte');

@@ -1,18 +1,15 @@
 // frontend/src/contexts/AuthContext.jsx
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import api, { USER_URL, LOGIN_URL, REGISTER_URL, LOGOUT_URL } from '../services/api';
+import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
     checkAuth();
   }, []);
 
@@ -23,13 +20,13 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
         return;
       }
-      const response = await api.get(USER_URL);
-      setUser(response.data);
-    } catch (error) {
-      console.error("Erreur d'authentification:", error);
+
+      const userData = await authAPI.getUser();
+      setUser(userData);
+    } catch (err) {
+      console.error('Erreur de vérification d\'authentification:', err);
       localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      delete api.defaults.headers.common['Authorization'];
+      localStorage.removeItem('refresh_token');
       setUser(null);
     } finally {
       setLoading(false);
@@ -38,53 +35,58 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await api.post(LOGIN_URL, { email, password });
-      const { user, access, refresh } = response.data;
-      localStorage.setItem('token', access);
-      localStorage.setItem('refreshToken', refresh);
-      api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
-      setUser(user);
-      return true;
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
-      throw error;
+      setError(null);
+      const response = await authAPI.login({ email, password });
+      
+      localStorage.setItem('token', response.access);
+      localStorage.setItem('refresh_token', response.refresh);
+      setUser(response.user);
+      return response;
+    } catch (err) {
+      setError(err.message || 'Erreur de connexion');
+      throw err;
     }
   };
 
   const register = async (userData) => {
     try {
-      const response = await api.post(REGISTER_URL, userData);
-      const { user, access, refresh } = response.data;
-      localStorage.setItem('token', access);
-      localStorage.setItem('refreshToken', refresh);
-      api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
-      setUser(user);
-      return true;
-    } catch (error) {
-      console.error("Erreur d'inscription:", error);
-      throw error;
+      setError(null);
+      const response = await authAPI.register(userData);
+      
+      localStorage.setItem('token', response.access);
+      localStorage.setItem('refresh_token', response.refresh);
+      setUser(response.user);
+      return response;
+    } catch (err) {
+      setError(err.message || 'Erreur d\'inscription');
+      throw err;
     }
   };
 
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        await api.post(LOGOUT_URL, { refresh: refreshToken });
-      }
-    } catch (error) {
-      console.error("Erreur lors de la déconnexion:", error);
+      await authAPI.logout();
+    } catch (err) {
+      console.error('Erreur lors de la déconnexion:', err);
     } finally {
       localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      delete api.defaults.headers.common['Authorization'];
+      localStorage.removeItem('refresh_token');
       setUser(null);
     }
   };
 
+  const value = {
+    user,
+    loading,
+    error,
+    login,
+    register,
+    logout,
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
@@ -92,7 +94,9 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth doit être utilisé à l'intérieur d'un AuthProvider");
+    throw new Error('useAuth doit être utilisé à l\'intérieur d\'un AuthProvider');
   }
   return context;
 };
+
+export default AuthContext;

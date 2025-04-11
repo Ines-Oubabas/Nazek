@@ -10,92 +10,206 @@ import {
   Link,
   Alert,
   Paper,
-  Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  FormControlLabel,
+  Switch,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import ServiceSelection from '../components/common/ServiceSelection';
+
+const steps = ['Informations personnelles', 'Type de compte', 'Informations professionnelles'];
 
 const Register = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
-    role: 'client', // ✅ "role" utilisé côté backend
-  });
-
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { register } = useAuth();
+  const [activeStep, setActiveStep] = useState(0);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  
+  // Informations personnelles
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  
+  // Type de compte
+  const [isEmployer, setIsEmployer] = useState(false);
+  
+  // Informations professionnelles
+  const [selectedService, setSelectedService] = useState('');
+  const [serviceDescription, setServiceDescription] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
+  const handleNext = () => {
+    setActiveStep((prevStep) => prevStep + 1);
   };
 
-  const generateUsername = (email) => {
-    return email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000);
+  const handleBack = () => {
+    setActiveStep((prevStep) => prevStep - 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
 
-    if (
-      !formData.email ||
-      !formData.password ||
-      !formData.confirmPassword ||
-      !formData.firstName ||
-      !formData.lastName ||
-      !formData.phone
-    ) {
-      setError('Veuillez remplir tous les champs.');
+    if (password !== confirmPassword) {
+      setError('Les mots de passe ne correspondent pas');
+      setLoading(false);
       return;
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      return setError('Les mots de passe ne correspondent pas');
-    }
-
     try {
-      setError('');
-      setLoading(true);
+      const userData = {
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        address,
+        is_employer: isEmployer,
+        ...(isEmployer && {
+          service_type: selectedService,
+          service_description: serviceDescription,
+        }),
+      };
 
-      const username = generateUsername(formData.email);
-
-      await register({
-        username: username,
-        email: formData.email,
-        password: formData.password,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        phone: formData.phone,
-        role: formData.role, // ✅ correspond à l'attribut "role" du modèle User
-      });
-
+      await register(userData);
       navigate('/');
     } catch (err) {
-      console.error(err);
-      const apiError = err?.response?.data;
-      if (typeof apiError === 'string') {
-        setError(apiError);
-      } else if (apiError?.email) {
-        setError(apiError.email.join(' '));
-      } else if (apiError?.username) {
-        setError(apiError.username.join(' '));
-      } else {
-        setError("Échec de l'inscription. Veuillez réessayer.");
-      }
+      setError(err.message || 'Une erreur est survenue lors de l\'inscription');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const renderStepContent = (step) => {
+    switch (step) {
+      case 0:
+        return (
+          <Box component="form" sx={{ mt: 2 }}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Prénom"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Nom"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Mot de passe"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Confirmer le mot de passe"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={handleNext}
+              sx={{ mt: 3 }}
+            >
+              Suivant
+            </Button>
+          </Box>
+        );
+      case 1:
+        return (
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isEmployer}
+                  onChange={(e) => setIsEmployer(e.target.checked)}
+                />
+              }
+              label="Je suis un prestataire de services"
+            />
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+              <Button onClick={handleBack}>Retour</Button>
+              <Button
+                variant="contained"
+                onClick={handleNext}
+              >
+                Suivant
+              </Button>
+            </Box>
+          </Box>
+        );
+      case 2:
+        return (
+          <Box component="form" sx={{ mt: 2 }}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Téléphone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Adresse"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            {isEmployer && (
+              <ServiceSelection
+                selectedService={selectedService}
+                onServiceChange={setSelectedService}
+                description={serviceDescription}
+                onDescriptionChange={setServiceDescription}
+              />
+            )}
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+              <Button onClick={handleBack}>Retour</Button>
+              <Button
+                type="submit"
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? 'Inscription en cours...' : 'S\'inscrire'}
+              </Button>
+            </Box>
+          </Box>
+        );
+      default:
+        return null;
     }
   };
 
@@ -113,97 +227,15 @@ const Register = () => {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Prénom"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Nom"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Téléphone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth required>
-                  <InputLabel>Type d'utilisateur</InputLabel>
-                  <Select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    label="Type d'utilisateur"
-                  >
-                    <MenuItem value="client">Client</MenuItem>
-                    <MenuItem value="employer">Professionnel</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Mot de passe"
-                  name="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Confirmer le mot de passe"
-                  name="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
+          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+            {steps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
-            >
-              {loading ? "Inscription en cours..." : "S'inscrire"}
-            </Button>
-          </Box>
+          {renderStepContent(activeStep)}
 
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="body2">

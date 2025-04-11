@@ -81,7 +81,7 @@ const Home: React.FC = () => {
                   <FontAwesomeIcon icon={faUserTie} className="me-2" />
                   Devenir prestataire
                 </Button>
-              </Link>
+        </Link>
             </Col>
             <Col md={6}>
               <img
@@ -92,7 +92,7 @@ const Home: React.FC = () => {
             </Col>
           </Row>
         </Container>
-      </div>
+        </div>
 
       {/* Services Section */}
       <Container className="py-5">
@@ -153,7 +153,7 @@ const Home: React.FC = () => {
             ))}
           </Row>
         </Container>
-      </div>
+        </div>
 
       {/* How It Works Section */}
       <Container className="py-5">
@@ -169,14 +169,14 @@ const Home: React.FC = () => {
           <Col md={4} className="text-center mb-4">
             <div className="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3" style={{ width: '80px', height: '80px' }}>
               <FontAwesomeIcon icon={faCalendarAlt} className="fa-2x" />
-            </div>
+        </div>
             <h4>2. Réservez</h4>
             <p>Choisissez une date et une heure</p>
           </Col>
           <Col md={4} className="text-center mb-4">
             <div className="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3" style={{ width: '80px', height: '80px' }}>
               <FontAwesomeIcon icon={faHandshake} className="fa-2x" />
-            </div>
+          </div>
             <h4>3. Profitez</h4>
             <p>Recevez le service à domicile</p>
           </Col>
@@ -205,7 +205,7 @@ const Home: React.FC = () => {
             </Col>
           </Row>
         </Container>
-      </div>
+        </div>
     </div>
   );
 };

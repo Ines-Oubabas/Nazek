@@ -256,30 +256,30 @@ const ProfileEmployer: React.FC = () => {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Client</th>
-                      <th>Service</th>
-                      <th>Date</th>
-                      <th>Statut</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <th>Client</th>
+              <th>Service</th>
+              <th>Date</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
                     {appointments.map(appointment => (
-                      <tr key={appointment.id}>
+              <tr key={appointment.id}>
                         <td>{appointment.client.name}</td>
                         <td>{appointment.service.name}</td>
-                        <td>{new Date(appointment.date).toLocaleString()}</td>
-                        <td>
+                <td>{new Date(appointment.date).toLocaleString()}</td>
+                <td>
                           <Badge bg={
                             appointment.status === 'en_attente' ? 'warning' :
                             appointment.status === 'accepté' ? 'success' :
                             appointment.status === 'refusé' ? 'danger' :
                             'secondary'
                           }>
-                            {appointment.status}
+                    {appointment.status}
                           </Badge>
-                        </td>
-                        <td>
+                </td>
+                <td>
                           {appointment.status === 'en_attente' && (
                             <>
                               <Button
@@ -299,11 +299,11 @@ const ProfileEmployer: React.FC = () => {
                               </Button>
                             </>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
               </div>
             </Card.Body>
           </Card>

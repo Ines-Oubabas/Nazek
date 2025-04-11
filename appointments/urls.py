@@ -22,11 +22,13 @@ from .views import (
     ClientProfile,
 
     # 👷 Employeurs
+    EmployerList,
     EmployerProfile,
     EmployerUpdate,
     EmployerAvailability,
 
     # 🛠️ Services
+    ServiceList,
     ServiceDetail,
 
     # 🔔 Notifications
@@ -56,17 +58,19 @@ urlpatterns = [
     path("clients/profile/", ClientProfile.as_view(), name="client_profile"),
 
     # 👷 Employeurs
+    path("employers/", EmployerList.as_view(), name="employer_list"),
     path("employers/profile/", EmployerProfile.as_view(), name="employer_profile"),
     path("employers/update/", EmployerUpdate.as_view(), name="employer_update"),
     path("employers/<int:employer_id>/availabilities/", EmployerAvailability.as_view(), name="employer_availability"),
 
     # 🛠️ Services
+    path("services/", ServiceList.as_view(), name="service_list"),
     path("services/<int:pk>/", ServiceDetail.as_view(), name="service_detail"),
 
     # 🔔 Notifications
     path("notifications/", NotificationList.as_view(), name="notification_list"),
-    path("notifications/<int:notification_id>/read/", MarkNotificationRead.as_view(), name="mark_notification_read"),
+    path("notifications/<int:pk>/read/", MarkNotificationRead.as_view(), name="mark_notification_read"),
 
     # 💳 Paiement
-    path("appointments/<int:appointment_id>/process-payment/", ProcessPayment.as_view(), name="process_payment"),
+    path("payments/process/", ProcessPayment.as_view(), name="process_payment"),
 ]

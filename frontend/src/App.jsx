@@ -1,62 +1,55 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Box from '@mui/material/Box';
-import { AuthProvider } from './contexts/AuthContext';
-import theme from './theme';
-
-import Navbar from './components/layout/Navbar';
+import { ThemeProvider, createTheme } from '@mui/material';
+import Navigation from './components/common/Navigation';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import AppointmentList from './pages/AppointmentList';
-import AppointmentDetail from './pages/AppointmentDetail';
 import Profile from './pages/Profile';
-import PrivateRoute from './components/routes/PrivateRoute';
+import Appointments from './pages/Appointments';
+import Search from './pages/Search';
+import Help from './pages/Help';
+import Messages from './pages/Messages';
+import Favorites from './pages/Favorites';
+import ServiceDetails from './pages/ServiceDetails';
+import { AuthProvider } from './contexts/AuthContext';
 
-function App() {
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#2196f3',
+    },
+    secondary: {
+      main: '#f50057',
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+  },
+});
+
+const App = () => {
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
       <AuthProvider>
         <Router>
-          <Navbar />
-          <Box sx={{ p: 3 }}>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-
-              <Route
-                path="/appointments"
-                element={
-                  <PrivateRoute>
-                    <AppointmentList />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/appointments/:id"
-                element={
-                  <PrivateRoute>
-                    <AppointmentDetail />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <PrivateRoute>
-                    <Profile />
-                  </PrivateRoute>
-                }
-              />
-            </Routes>
-          </Box>
+          <Navigation />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/appointments" element={<Appointments />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/help" element={<Help />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/favorites" element={<Favorites />} />
+            <Route path="/services/:id" element={<ServiceDetails />} />
+          </Routes>
         </Router>
       </AuthProvider>
     </ThemeProvider>
   );
-}
+};
 
 export default App;
