@@ -26,7 +26,7 @@ import {
   Security as SecurityIcon,
 } from '@mui/icons-material';
 import ServiceCard from '../components/common/ServiceCard';
-import api from '../services/api';
+import api, { getServices } from '../services/api';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ const Home = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getServices();
+      const data = await getServices();
       setServices(data);
     } catch (err) {
       setError(err.message || 'Une erreur est survenue lors du chargement des services');
@@ -251,4 +251,4 @@ const Home = () => {
   );
 };
 
-export default Home; 
+export default Home;

@@ -71,7 +71,7 @@ export const apiRequest = async (url, options = {}) => {
 // URLs de l'API
 export const AUTH_URLS = {
   LOGIN: '/auth/login/',
-  REGISTER: '/auth/register/',
+  REGISTER: '/api/v1/auth/register/',
   REFRESH: '/auth/refresh/',
   LOGOUT: '/auth/logout/',
   USER: '/auth/user/',
@@ -98,6 +98,20 @@ export const USER_URLS = {
   UPDATE: '/users/update/',
   CHANGE_PASSWORD: '/users/change-password/',
 };
+
+export const CHANGE_PASSWORD_URL = USER_URLS.CHANGE_PASSWORD;
+
+// Add the missing export for UPDATE_PROFILE_URL
+export const UPDATE_PROFILE_URL = USER_URLS.UPDATE;
+
+// Add the missing export for USERS_URL
+export const USERS_URL = USER_URLS;
+
+// Add the missing export for APPOINTMENTS_URL
+export const APPOINTMENTS_URL = APPOINTMENT_URLS;
+
+// Add the missing export for SERVICES_URL
+export const SERVICES_URL = SERVICE_URLS;
 
 // Fonctions d'API
 export const authAPI = {
@@ -161,6 +175,10 @@ export const userAPI = {
     method: 'POST',
     data,
   }),
+};
+
+export const getServices = async () => {
+  return apiRequest(SERVICE_URLS.LIST);
 };
 
 export default api;
