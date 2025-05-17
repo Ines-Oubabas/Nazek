@@ -18,7 +18,7 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  Typography,
+  Typography
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -31,7 +31,7 @@ import {
   ExitToApp as LogoutIcon,
   Favorite as FavoriteIcon,
   Chat as ChatIcon,
-  Help as HelpIcon,
+  Help as HelpIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -44,27 +44,10 @@ const Navigation = () => {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [notificationsAnchor, setNotificationsAnchor] = useState(null);
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleNotificationsOpen = (event) => {
-    setNotificationsAnchor(event.currentTarget);
-  };
-
-  const handleNotificationsClose = () => {
-    setNotificationsAnchor(null);
-  };
+  const toggleDrawer = () => setMobileOpen(!mobileOpen);
+  const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
 
   const handleLogout = async () => {
     await logout();
@@ -77,19 +60,19 @@ const Navigation = () => {
     { text: 'Rendez-vous', icon: <CalendarIcon />, path: '/appointments' },
     { text: 'Favoris', icon: <FavoriteIcon />, path: '/favorites' },
     { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
-    { text: 'Aide', icon: <HelpIcon />, path: '/help' },
+    { text: 'Aide', icon: <HelpIcon />, path: '/help' }
   ];
 
-  const drawer = (
+  const drawerContent = (
     <Box sx={{ p: 2 }}>
       <List>
         {menuItems.map((item) => (
           <ListItem
-            component="button"
+            button
             key={item.text}
             onClick={() => {
               navigate(item.path);
-              if (isMobile) handleDrawerToggle();
+              toggleDrawer();
             }}
             selected={location.pathname === item.path}
           >
@@ -100,49 +83,23 @@ const Navigation = () => {
         <Divider sx={{ my: 2 }} />
         {user ? (
           <>
-            <ListItem
-              component="button"
-              onClick={() => {
-                navigate('/profile');
-                if (isMobile) handleDrawerToggle();
-              }}
-            >
-              <ListItemIcon>
-                <Avatar src={user.profile_picture} sx={{ width: 24, height: 24 }} />
-              </ListItemIcon>
+            <ListItem button onClick={() => navigate('/profile')}>
+              <ListItemIcon><Avatar src={user.profile_picture} /></ListItemIcon>
               <ListItemText primary={user.name} />
             </ListItem>
-            <ListItem component="button" onClick={handleLogout}>
-              <ListItemIcon>
-                <LogoutIcon />
-              </ListItemIcon>
+            <ListItem button onClick={handleLogout}>
+              <ListItemIcon><LogoutIcon /></ListItemIcon>
               <ListItemText primary="Déconnexion" />
             </ListItem>
           </>
         ) : (
           <>
-            <ListItem
-              component="button"
-              onClick={() => {
-                navigate('/login');
-                if (isMobile) handleDrawerToggle();
-              }}
-            >
-              <ListItemIcon>
-                <PersonIcon />
-              </ListItemIcon>
+            <ListItem button onClick={() => navigate('/login')}>
+              <ListItemIcon><PersonIcon /></ListItemIcon>
               <ListItemText primary="Connexion" />
             </ListItem>
-            <ListItem
-              component="button"
-              onClick={() => {
-                navigate('/register');
-                if (isMobile) handleDrawerToggle();
-              }}
-            >
-              <ListItemIcon>
-                <PersonIcon />
-              </ListItemIcon>
+            <ListItem button onClick={() => navigate('/register')}>
+              <ListItemIcon><PersonIcon /></ListItemIcon>
               <ListItemText primary="Inscription" />
             </ListItem>
           </>
@@ -156,40 +113,26 @@ const Navigation = () => {
       <AppBar position="fixed" color="default" elevation={1}>
         <Toolbar>
           {isMobile && (
-            <IconButton
-              color="inherit"
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2 }}
-            >
+            <IconButton edge="start" onClick={toggleDrawer} color="inherit">
               <MenuIcon />
             </IconButton>
           )}
-          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
-            <img
-              src="/logo.png"
-              alt="Logo"
-              style={{ height: 40, marginRight: 16 }}
-            />
-            {!isMobile && (
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                {menuItems.map((item) => (
-                  <Button
-                    key={item.text}
-                    startIcon={item.icon}
-                    onClick={() => navigate(item.path)}
-                    color={location.pathname === item.path ? 'primary' : 'inherit'}
-                  >
-                    {item.text}
-                  </Button>
-                ))}
-              </Box>
-            )}
-          </Box>
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600, cursor: 'pointer' }} onClick={() => navigate('/')}>Nazek</Typography>
+          {!isMobile && menuItems.map((item) => (
+            <Button
+              key={item.text}
+              startIcon={item.icon}
+              onClick={() => navigate(item.path)}
+              color={location.pathname === item.path ? 'primary' : 'inherit'}
+            >
+              {item.text}
+            </Button>
+          ))}
+
           {!isMobile && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <IconButton onClick={handleNotificationsOpen}>
-                <Badge badgeContent={4} color="error">
+            <>
+              <IconButton onClick={handleMenuOpen}>
+                <Badge badgeContent={2} color="error">
                   <NotificationsIcon />
                 </Badge>
               </IconButton>
@@ -198,96 +141,33 @@ const Navigation = () => {
                   <IconButton onClick={handleMenuOpen}>
                     <Avatar src={user.profile_picture} />
                   </IconButton>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={Boolean(anchorEl)}
-                    onClose={handleMenuClose}
-                  >
-                    <MenuItem onClick={() => { navigate('/profile'); handleMenuClose(); }}>
-                      <PersonIcon sx={{ mr: 1 }} /> Profil
-                    </MenuItem>
-                    <MenuItem onClick={() => { navigate('/settings'); handleMenuClose(); }}>
-                      <SettingsIcon sx={{ mr: 1 }} /> Paramètres
-                    </MenuItem>
-                    <MenuItem onClick={handleLogout}>
-                      <LogoutIcon sx={{ mr: 1 }} /> Déconnexion
-                    </MenuItem>
+                  <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+                    <MenuItem onClick={() => { navigate('/profile'); handleMenuClose(); }}><PersonIcon sx={{ mr: 1 }} /> Profil</MenuItem>
+                    <MenuItem onClick={() => { navigate('/settings'); handleMenuClose(); }}><SettingsIcon sx={{ mr: 1 }} /> Paramètres</MenuItem>
+                    <MenuItem onClick={handleLogout}><LogoutIcon sx={{ mr: 1 }} /> Déconnexion</MenuItem>
                   </Menu>
                 </>
               ) : (
                 <>
-                  <Button
-                    color="inherit"
-                    startIcon={<PersonIcon />}
-                    onClick={() => navigate('/login')}
-                  >
-                    Connexion
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<PersonIcon />}
-                    onClick={() => navigate('/register')}
-                  >
-                    Inscription
-                  </Button>
+                  <Button color="inherit" onClick={() => navigate('/login')}>Connexion</Button>
+                  <Button variant="contained" color="primary" onClick={() => navigate('/register')}>Inscription</Button>
                 </>
               )}
-            </Box>
+            </>
           )}
         </Toolbar>
       </AppBar>
+
       <Drawer
-        variant="temporary"
         anchor="left"
         open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{
-          keepMounted: true,
-        }}
-        sx={{
-          display: { xs: 'block', sm: 'none' },
-          '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240 },
-        }}
+        onClose={toggleDrawer}
+        sx={{ display: { xs: 'block', sm: 'none' }, '& .MuiDrawer-paper': { width: 250 } }}
       >
-        {drawer}
+        {drawerContent}
       </Drawer>
-      <Drawer
-        variant="permanent"
-        sx={{
-          display: { xs: 'none', md: 'block' },
-          '& .MuiDrawer-paper': {
-            boxSizing: 'border-box',
-            width: 240,
-          },
-        }}
-      >
-        {drawer}
-      </Drawer>
-      <Menu
-        anchorEl={notificationsAnchor}
-        open={Boolean(notificationsAnchor)}
-        onClose={handleNotificationsClose}
-      >
-        <MenuItem>
-          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="subtitle2">Nouveau message</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Vous avez reçu un nouveau message
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem>
-          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="subtitle2">Rendez-vous confirmé</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Votre rendez-vous a été confirmé
-            </Typography>
-          </Box>
-        </MenuItem>
-      </Menu>
     </>
   );
 };
 
-export default Navigation; 
+export default Navigation;

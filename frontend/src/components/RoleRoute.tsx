@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import api from '../api';
+import { userAPI } from '@/services/api'; // ✅ Import corrigé
 
 interface RoleRouteProps {
   children: React.ReactNode;
@@ -14,8 +14,8 @@ const RoleRoute: React.FC<RoleRouteProps> = ({ children, role }) => {
   React.useEffect(() => {
     const checkRole = async () => {
       try {
-        const response = await api.get('/users/me/');
-        setUserRole(response.data.role);
+        const response = await userAPI.getProfile(); // ✅ utiliser userAPI
+        setUserRole(response.role);
       } catch (err) {
         setUserRole(null);
       }
@@ -29,10 +29,10 @@ const RoleRoute: React.FC<RoleRouteProps> = ({ children, role }) => {
   }
 
   if (userRole !== role) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
 };
 
-export default RoleRoute; 
+export default RoleRoute;

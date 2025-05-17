@@ -31,7 +31,8 @@ import {
   Edit as EditIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
-import { APPOINTMENTS_URL } from '../../services/api';
+
+import { appointmentAPI } from '@/services/api'; // ✅ On importe l'API corrigée
 
 const AppointmentList = () => {
   const theme = useTheme();
@@ -42,10 +43,7 @@ const AppointmentList = () => {
   const [error, setError] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
-  const [reviewData, setReviewData] = useState({
-    rating: 0,
-    comment: '',
-  });
+  const [reviewData, setReviewData] = useState({ rating: 0, comment: '' });
 
   useEffect(() => {
     fetchAppointments();
@@ -54,21 +52,10 @@ const AppointmentList = () => {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(APPOINTMENTS_URL, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de la récupération des rendez-vous');
-      }
-
-      const data = await response.json();
+      const data = await appointmentAPI.list(); // ✅ Appel direct de l'API
       setAppointments(data);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Erreur lors de la récupération des rendez-vous');
     } finally {
       setLoading(false);
     }
@@ -80,73 +67,35 @@ const AppointmentList = () => {
 
   const handleCancelAppointment = async (appointmentId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${APPOINTMENTS_URL}/${appointmentId}/cancel`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de l\'annulation du rendez-vous');
-      }
-
+      await appointmentAPI.cancel(appointmentId); // ✅ Appel direct de l'API
       fetchAppointments();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Erreur lors de l'annulation du rendez-vous");
     }
   };
 
   const handleReviewSubmit = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${APPOINTMENTS_URL}/${selectedAppointment.id}/review`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(reviewData),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de l\'envoi de l\'avis');
+      if (selectedAppointment) {
+        await appointmentAPI.review(selectedAppointment.id, reviewData); // ✅ Appel direct
+        setShowReviewDialog(false);
+        fetchAppointments();
       }
-
-      setShowReviewDialog(false);
-      fetchAppointments();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Erreur lors de l'envoi de l'avis");
     }
   };
 
   const filteredAppointments = appointments.filter((appointment) => {
-    switch (tabValue) {
-      case 0:
-        return appointment.status === 'confirmed';
-      case 1:
-        return appointment.status === 'pending';
-      case 2:
-        return appointment.status === 'cancelled';
-      default:
-        return true;
-    }
+    if (tabValue === 0) return appointment.status === 'confirmed';
+    if (tabValue === 1) return appointment.status === 'pending';
+    if (tabValue === 2) return appointment.status === 'cancelled';
+    return true;
   });
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '60vh',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
         <CircularProgress />
       </Box>
     );
@@ -167,14 +116,7 @@ const AppointmentList = () => {
           value={tabValue}
           onChange={handleTabChange}
           variant={isMobile ? 'fullWidth' : 'standard'}
-          sx={{
-            borderBottom: 1,
-            borderColor: 'divider',
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 500,
-            },
-          }}
+          sx={{ borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { textTransform: 'none', fontWeight: 500 } }}
         >
           <Tab label="Confirmés" />
           <Tab label="En attente" />
@@ -186,31 +128,22 @@ const AppointmentList = () => {
         {filteredAppointments.map((appointment) => (
           <Grid item xs={12} key={appointment.id}>
             <Fade in timeout={500}>
-              <Card
-                sx={{
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  backdropFilter: 'blur(10px)',
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                  },
-                }}
-              >
+              <Card sx={{ background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-4px)' } }}>
                 <CardContent>
                   <Grid container spacing={2} alignItems="center">
                     <Grid item>
                       <Avatar
-                        src={appointment.provider.image}
-                        alt={appointment.provider.name}
+                        src={appointment.provider?.image || '/images/default-avatar.png'}
+                        alt={appointment.provider?.name || ''}
                         sx={{ width: 56, height: 56 }}
                       />
                     </Grid>
                     <Grid item xs>
                       <Typography variant="h6" gutterBottom>
-                        {appointment.service.name}
+                        {appointment.service?.name || 'Service'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {appointment.provider.name}
+                        {appointment.provider?.name || 'Prestataire'}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                         <Typography variant="body2" color="text.secondary">
@@ -220,16 +153,6 @@ const AppointmentList = () => {
                             month: 'long',
                             day: 'numeric',
                           })}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mx: 1 }}
-                        >
-                          •
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {appointment.time}
                         </Typography>
                       </Box>
                     </Grid>
@@ -253,7 +176,7 @@ const AppointmentList = () => {
                     <>
                       <IconButton
                         color="primary"
-                        onClick={() => window.location.href = `/messages/${appointment.provider.id}`}
+                        onClick={() => window.location.href = `/messages/${appointment.provider?.id}`}
                       >
                         <MessageIcon />
                       </IconButton>
@@ -293,21 +216,15 @@ const AppointmentList = () => {
         ))}
       </Grid>
 
-      <Dialog
-        open={showReviewDialog}
-        onClose={() => setShowReviewDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+      {/* Dialog pour laisser un avis */}
+      <Dialog open={showReviewDialog} onClose={() => setShowReviewDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Donner votre avis</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <Typography component="legend">Note</Typography>
             <Rating
               value={reviewData.rating}
-              onChange={(event, newValue) => {
-                setReviewData({ ...reviewData, rating: newValue });
-              }}
+              onChange={(e, newValue) => setReviewData({ ...reviewData, rating: newValue || 0 })}
             />
             <TextField
               fullWidth
@@ -322,11 +239,7 @@ const AppointmentList = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowReviewDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={handleReviewSubmit}
-            disabled={!reviewData.rating}
-          >
+          <Button variant="contained" onClick={handleReviewSubmit} disabled={!reviewData.rating}>
             Envoyer
           </Button>
         </DialogActions>
@@ -335,4 +248,4 @@ const AppointmentList = () => {
   );
 };
 
-export default AppointmentList; 
+export default AppointmentList;

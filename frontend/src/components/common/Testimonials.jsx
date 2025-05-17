@@ -9,7 +9,6 @@ import {
   IconButton,
   useTheme,
   useMediaQuery,
-  Fade,
   Slide,
 } from '@mui/material';
 import {
@@ -56,37 +55,39 @@ const Testimonials = () => {
   };
 
   return (
-    <Box sx={{ position: 'relative', py: 4 }}>
+    <Box sx={{ position: 'relative', py: 6, px: 2, bgcolor: 'background.default' }}>
       <Typography
         variant="h4"
         component="h2"
         align="center"
         gutterBottom
-        sx={{ mb: 4, fontWeight: 'bold' }}
+        sx={{ fontWeight: 'bold', mb: 4 }}
       >
         Ce que disent nos clients
       </Typography>
 
       <Box sx={{ position: 'relative', maxWidth: 800, mx: 'auto' }}>
-        <Fade in={true} timeout={1000}>
+        <Slide in direction="up" timeout={500} key={currentIndex}>
           <Card
-            elevation={3}
+            elevation={4}
             sx={{
-              borderRadius: 4,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.8) 100%)',
+              borderRadius: 3,
+              px: isMobile ? 2 : 4,
+              py: 4,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,245,245,0.85))',
               backdropFilter: 'blur(10px)',
+              transition: 'all 0.3s ease-in-out',
+              boxShadow: theme.shadows[6],
             }}
           >
-            <CardContent sx={{ p: 4 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <Avatar
                   src={testimonials[currentIndex].image}
                   sx={{ width: 64, height: 64, mr: 2 }}
                 />
                 <Box>
-                  <Typography variant="h6" gutterBottom>
-                    {testimonials[currentIndex].name}
-                  </Typography>
+                  <Typography variant="h6">{testimonials[currentIndex].name}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     {testimonials[currentIndex].role}
                   </Typography>
@@ -99,52 +100,45 @@ const Testimonials = () => {
                   variant="body1"
                   sx={{
                     fontStyle: 'italic',
-                    fontSize: isMobile ? '1rem' : '1.1rem',
+                    lineHeight: 1.6,
                   }}
                 >
                   {testimonials[currentIndex].text}
                 </Typography>
               </Box>
 
-              <Rating
-                value={testimonials[currentIndex].rating}
-                readOnly
-                sx={{ color: 'warning.main' }}
-              />
+              <Rating value={testimonials[currentIndex].rating} readOnly sx={{ color: 'warning.main' }} />
             </CardContent>
           </Card>
-        </Fade>
+        </Slide>
 
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: 2,
-            mt: 3,
-          }}
-        >
+        {/* Navigation */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
           <IconButton
             onClick={handlePrevious}
             sx={{
               bgcolor: 'background.paper',
-              boxShadow: 2,
               '&:hover': {
                 bgcolor: 'primary.light',
                 color: 'white',
               },
+              boxShadow: 3,
+              transition: 'all 0.2s ease',
             }}
           >
             <ChevronLeftIcon />
           </IconButton>
+
           <IconButton
             onClick={handleNext}
             sx={{
               bgcolor: 'background.paper',
-              boxShadow: 2,
               '&:hover': {
                 bgcolor: 'primary.light',
                 color: 'white',
               },
+              boxShadow: 3,
+              transition: 'all 0.2s ease',
             }}
           >
             <ChevronRightIcon />
@@ -155,4 +149,4 @@ const Testimonials = () => {
   );
 };
 
-export default Testimonials; 
+export default Testimonials;

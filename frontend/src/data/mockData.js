@@ -8,7 +8,7 @@ export const services = [
     rating: 4.8,
     total_reviews: 156,
     location: 'Alger',
-    image: '/images/services/cleaning.jpg',
+    image: null, // sera rempli par le prestataire
     category: 'Ménage',
     tags: ['Nettoyage', 'Professionnel', 'Écologique'],
     providers: [1, 2, 3],
@@ -22,7 +22,7 @@ export const services = [
     rating: 4.9,
     total_reviews: 89,
     location: 'Alger',
-    image: '/images/services/teaching.jpg',
+    image: null,
     category: 'Éducation',
     tags: ['Éducation', 'Personnalisé', 'Qualifié'],
     providers: [4, 5],
@@ -36,7 +36,7 @@ export const services = [
     rating: 4.7,
     total_reviews: 234,
     location: 'Alger',
-    image: '/images/services/repair.jpg',
+    image: null,
     category: 'Bricolage',
     tags: ['Réparation', 'Installation', 'Professionnel'],
     providers: [6, 7],
@@ -47,7 +47,7 @@ export const providers = [
   {
     id: 1,
     name: 'Sarah Benali',
-    avatar: '/images/providers/sarah.jpg',
+    avatar: null,
     experience: 5,
     description: 'Professionnelle du ménage avec plus de 5 ans d\'expérience. Spécialisée dans le nettoyage écologique.',
     services: [1],
@@ -66,7 +66,7 @@ export const providers = [
   {
     id: 2,
     name: 'Karim Boudiaf',
-    avatar: '/images/providers/karim.jpg',
+    avatar: null,
     experience: 3,
     description: 'Prestataire de services de ménage professionnel. Méthodique et efficace.',
     services: [1],
@@ -85,7 +85,7 @@ export const providers = [
   {
     id: 4,
     name: 'Leila Hamidi',
-    avatar: '/images/providers/leila.jpg',
+    avatar: null,
     experience: 8,
     description: 'Professeur expérimentée en mathématiques et physique. Spécialisée dans la préparation aux examens.',
     services: [2],
@@ -104,7 +104,7 @@ export const providers = [
   {
     id: 6,
     name: 'Yacine Khelifi',
-    avatar: '/images/providers/yacine.jpg',
+    avatar: null,
     experience: 6,
     description: 'Bricoleur professionnel polyvalent. Spécialisé dans la réparation et l\'installation.',
     services: [3],
@@ -165,4 +165,4 @@ export const categories = [
   { id: 3, name: 'Bricolage', icon: 'build' },
   { id: 4, name: 'Cuisine', icon: 'restaurant' },
   { id: 5, name: 'Transport', icon: 'directions_car' },
-]; 
+];

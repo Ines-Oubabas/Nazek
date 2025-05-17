@@ -9,14 +9,14 @@ import {
   faPhone, 
   faEnvelope, 
   faCheckCircle,
-  faTimesCircle,
   faCalendarAlt,
   faUserTie,
   faInfoCircle,
   faMoneyBillWave
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
-import { Employer, Availability, Review } from '../types';
+import { employerAPI } from '@/services/api';
+import api from '@/config/api'; // ✅ Ajouté pour utiliser api.get
+import { Employer, Availability, Review } from '@/types'; // ✅ Correct import
 
 const EmployerDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -81,13 +81,13 @@ const EmployerDetail: React.FC = () => {
               <div className="d-flex align-items-center mb-4">
                 <img
                   src={employer.profile_picture || '/default-avatar.png'}
-                  alt={employer.name}
+                  alt={`${employer.first_name} ${employer.last_name}`} // ✅ Corrigé
                   className="rounded-circle me-3"
                   style={{ width: '100px', height: '100px', objectFit: 'cover' }}
                 />
                 <div>
                   <h2 className="mb-1">
-                    {employer.name}
+                    {employer.first_name} {employer.last_name} {/* ✅ Corrigé */}
                     {employer.is_verified && (
                       <FontAwesomeIcon icon={faCheckCircle} className="text-primary ms-2" />
                     )}
@@ -99,7 +99,7 @@ const EmployerDetail: React.FC = () => {
                   </div>
                   <div className="d-flex align-items-center">
                     <FontAwesomeIcon icon={faMoneyBillWave} className="text-success me-2" />
-                    <span>{employer.hourly_rate} DH/heure</span>
+                    <span>{employer.hourly_rate} DA/heure</span>
                   </div>
                 </div>
               </div>
@@ -118,11 +118,11 @@ const EmployerDetail: React.FC = () => {
                   Services proposés
                 </h4>
                 <div className="d-flex flex-wrap gap-2">
-                  {employer.services.map(service => (
-                    <Badge key={service.id} bg="primary" className="p-2">
-                      {service.name}
+                  {employer.service && (
+                    <Badge key={employer.service.id} bg="primary" className="p-2">
+                      {employer.service.name}
                     </Badge>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -137,9 +137,7 @@ const EmployerDetail: React.FC = () => {
                       <div className="d-flex justify-content-between align-items-center">
                         <span>{getDayName(availability.day_of_week)}</span>
                         <span>
-                          {new Date(`1970-01-01T${availability.start_time}`).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                          {' - '}
-                          {new Date(`1970-01-01T${availability.end_time}`).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(`1970-01-01T${availability.start_time}`).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - {new Date(`1970-01-01T${availability.end_time}`).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     </ListGroup.Item>
@@ -161,7 +159,7 @@ const EmployerDetail: React.FC = () => {
                             {[...Array(5)].map((_, i) => (
                               <FontAwesomeIcon
                                 key={i}
-                                icon={i < review.rating ? faStar : faStar}
+                                icon={faStar}
                                 className={i < review.rating ? 'text-warning' : 'text-muted'}
                               />
                             ))}
@@ -217,4 +215,4 @@ const EmployerDetail: React.FC = () => {
   );
 };
 
-export default EmployerDetail; 
+export default EmployerDetail;

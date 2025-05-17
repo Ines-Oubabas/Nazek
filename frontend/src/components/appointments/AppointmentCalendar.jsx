@@ -18,10 +18,7 @@ const AppointmentCalendar = ({ onSelectDateTime }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
 
-  // Générer les 7 prochains jours
   const dates = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
-
-  // Générer les créneaux horaires (9h à 17h, par 30 minutes)
   const timeSlots = Array.from({ length: 17 }, (_, i) => {
     const hour = Math.floor(i / 2) + 9;
     const minute = i % 2 === 0 ? '00' : '30';
@@ -60,11 +57,11 @@ const AppointmentCalendar = ({ onSelectDateTime }) => {
                 background: selectedDate && isSameDay(selectedDate, date)
                   ? 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)'
                   : 'rgba(255, 255, 255, 0.9)',
-                color: selectedDate && isSameDay(selectedDate, date) ? 'white' : 'inherit',
+                color: selectedDate && isSameDay(selectedDate, date) ? 'white' : 'text.primary',
                 '&:hover': {
                   background: selectedDate && isSameDay(selectedDate, date)
                     ? 'linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)'
-                    : 'rgba(255, 255, 255, 0.95)',
+                    : 'rgba(33, 150, 243, 0.08)',
                 },
               }}
               onClick={() => handleDateSelect(date)}
@@ -80,39 +77,42 @@ const AppointmentCalendar = ({ onSelectDateTime }) => {
         ))}
       </Grid>
 
-      <Fade in={!!selectedDate}>
-        <Box>
-          <Typography variant="subtitle1" gutterBottom>
-            Sélectionnez une heure
-          </Typography>
-          <Grid container spacing={1}>
-            {timeSlots.map((time) => (
-              <Grid item xs={4} sm={3} md={2} key={time}>
-                <Button
-                  variant={selectedTime === time ? 'contained' : 'outlined'}
-                  fullWidth
-                  size="small"
-                  onClick={() => handleTimeSelect(time)}
-                  sx={{
-                    background: selectedTime === time
-                      ? 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)'
-                      : 'transparent',
-                    '&:hover': {
+      {selectedDate && (
+        <Fade in>
+          <Box>
+            <Typography variant="subtitle1" gutterBottom>
+              Sélectionnez une heure
+            </Typography>
+            <Grid container spacing={1}>
+              {timeSlots.map((time) => (
+                <Grid item xs={4} sm={3} md={2} key={time}>
+                  <Button
+                    variant={selectedTime === time ? 'contained' : 'outlined'}
+                    fullWidth
+                    size="small"
+                    onClick={() => handleTimeSelect(time)}
+                    sx={{
                       background: selectedTime === time
-                        ? 'linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)'
-                        : 'rgba(33, 150, 243, 0.1)',
-                    },
-                  }}
-                >
-                  {time}
-                </Button>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-      </Fade>
+                        ? 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)'
+                        : 'transparent',
+                      color: selectedTime === time ? 'white' : 'inherit',
+                      '&:hover': {
+                        background: selectedTime === time
+                          ? 'linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)'
+                          : 'rgba(33, 150, 243, 0.1)',
+                      },
+                    }}
+                  >
+                    {time}
+                  </Button>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Fade>
+      )}
     </Box>
   );
 };
 
-export default AppointmentCalendar; 
+export default AppointmentCalendar;

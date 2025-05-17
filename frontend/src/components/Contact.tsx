@@ -1,21 +1,25 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import { Button, Form, Spinner, Alert } from 'react-bootstrap';
+
+// Schéma de validation avec Yup
+const schema = yup.object().shape({
+  name: yup.string().required('Le nom est obligatoire'),
+  email: yup.string().email('Email invalide').required('L\'email est obligatoire'),
+  message: yup.string().required('Le message ne peut pas être vide')
+});
 
 const Contact: React.FC = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    message: '',
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+    resolver: yupResolver(schema) // Intégration de Yup pour la validation
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = (data: any) => {
+    // Ici tu gères l'envoi des données du formulaire
     alert('Message envoyé avec succès !');
-    setFormData({ name: '', email: '', message: '' });
+    console.log(data); // Affiche les données dans la console
   };
 
   return (
@@ -23,21 +27,51 @@ const Contact: React.FC = () => {
       <h1 className="text-center">Contactez-nous</h1>
       <p className="text-center">Remplissez le formulaire ci-dessous et nous vous répondrons dès que possible.</p>
 
-      <form onSubmit={handleSubmit} className="mx-auto" style={{ maxWidth: '600px' }}>
+      <Form onSubmit={handleSubmit(onSubmit)} className="mx-auto" style={{ maxWidth: '600px' }}>
         <div className="mb-3">
-          <label htmlFor="name" className="form-label">Nom</label>
-          <input type="text" id="name" name="name" className="form-control" value={formData.name} onChange={handleChange} required />
+          <Form.Label htmlFor="name">Nom</Form.Label>
+          <Form.Control
+            type="text"
+            id="name"
+            {...register('name')} // Enregistrement du champ
+            isInvalid={!!errors.name} // Afficher l'erreur si elle existe
+          />
+          <Form.Control.Feedback type="invalid">
+            {errors.name?.message}
+          </Form.Control.Feedback>
         </div>
+
         <div className="mb-3">
-          <label htmlFor="email" className="form-label">Email</label>
-          <input type="email" id="email" name="email" className="form-control" value={formData.email} onChange={handleChange} required />
+          <Form.Label htmlFor="email">Email</Form.Label>
+          <Form.Control
+            type="email"
+            id="email"
+            {...register('email')}
+            isInvalid={!!errors.email}
+          />
+          <Form.Control.Feedback type="invalid">
+            {errors.email?.message}
+          </Form.Control.Feedback>
         </div>
+
         <div className="mb-3">
-          <label htmlFor="message" className="form-label">Message</label>
-          <textarea id="message" name="message" className="form-control" rows={4} value={formData.message} onChange={handleChange} required />
+          <Form.Label htmlFor="message">Message</Form.Label>
+          <Form.Control
+            as="textarea"
+            id="message"
+            {...register('message')}
+            rows={4}
+            isInvalid={!!errors.message}
+          />
+          <Form.Control.Feedback type="invalid">
+            {errors.message?.message}
+          </Form.Control.Feedback>
         </div>
-        <button type="submit" className="btn btn-primary w-100">Envoyer</button>
-      </form>
+
+        <Button type="submit" className="w-100" disabled={isSubmitting}>
+          {isSubmitting ? <Spinner animation="border" size="sm" /> : 'Envoyer'}
+        </Button>
+      </Form>
     </div>
   );
 };

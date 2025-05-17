@@ -6,13 +6,8 @@ import {
   TextField,
   Box,
   Typography,
-  Card,
-  CardContent,
-  CardMedia,
   Button,
-  Chip,
   Rating,
-  Slider,
   FormControl,
   InputLabel,
   Select,
@@ -21,6 +16,7 @@ import {
   Alert,
   Paper,
   Divider,
+  InputAdornment,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -28,8 +24,9 @@ import {
   Star as StarIcon,
   Euro as EuroIcon,
 } from '@mui/icons-material';
-import api, { SERVICES_URL } from '../services/api';
-import ServiceCard from '../components/common/ServiceCard';
+
+import ServiceCard from '@/components/common/ServiceCard';
+import { serviceAPI } from '@/services/api'; // ✅ Correction ici
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -54,10 +51,10 @@ const Search = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await api.getServices();
-      setServices(response);
+      const data = await serviceAPI.list(); // ✅ Correction ici
+      setServices(data);
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue lors du chargement des services');
+      setError(err.message || 'Erreur lors du chargement des services');
     } finally {
       setLoading(false);
     }
@@ -66,7 +63,7 @@ const Search = () => {
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
@@ -83,13 +80,14 @@ const Search = () => {
             <Grid item xs={12} md={5}>
               <TextField
                 fullWidth
-                variant="outlined"
                 placeholder="Que recherchez-vous ?"
                 value={filters.query}
                 onChange={(e) => handleFilterChange('query', e.target.value)}
                 InputProps={{
                   startAdornment: (
-                    <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
                   ),
                 }}
               />
@@ -97,24 +95,20 @@ const Search = () => {
             <Grid item xs={12} md={5}>
               <TextField
                 fullWidth
-                variant="outlined"
                 placeholder="Où ?"
                 value={filters.location}
                 onChange={(e) => handleFilterChange('location', e.target.value)}
                 InputProps={{
                   startAdornment: (
-                    <LocationIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                    <InputAdornment position="start">
+                      <LocationIcon />
+                    </InputAdornment>
                   ),
                 }}
               />
             </Grid>
             <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="contained"
-                type="submit"
-                sx={{ height: '56px' }}
-              >
+              <Button fullWidth variant="contained" type="submit" sx={{ height: '56px' }}>
                 Rechercher
               </Button>
             </Grid>
@@ -123,6 +117,7 @@ const Search = () => {
       </Paper>
 
       <Grid container spacing={3}>
+        {/* Filtres */}
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
@@ -130,9 +125,10 @@ const Search = () => {
             </Typography>
             <Divider sx={{ my: 2 }} />
 
+            {/* Prix */}
             <Box sx={{ mb: 3 }}>
               <Typography gutterBottom>Prix</Typography>
-              <Grid container spacing={2} alignItems="center">
+              <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <TextField
                     fullWidth
@@ -141,7 +137,7 @@ const Search = () => {
                     value={filters.minPrice}
                     onChange={(e) => handleFilterChange('minPrice', e.target.value)}
                     InputProps={{
-                      startAdornment: <EuroIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                      startAdornment: <EuroIcon sx={{ mr: 1 }} />,
                     }}
                   />
                 </Grid>
@@ -153,43 +149,44 @@ const Search = () => {
                     value={filters.maxPrice}
                     onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
                     InputProps={{
-                      startAdornment: <EuroIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                      startAdornment: <EuroIcon sx={{ mr: 1 }} />,
                     }}
                   />
                 </Grid>
               </Grid>
             </Box>
 
+            {/* Note */}
             <Box sx={{ mb: 3 }}>
               <Typography gutterBottom>Note minimum</Typography>
               <Rating
                 value={filters.rating}
                 onChange={(_, value) => handleFilterChange('rating', value)}
                 precision={0.5}
-                emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
+                emptyIcon={<StarIcon style={{ opacity: 0.3 }} />}
               />
             </Box>
 
-            <Box>
-              <FormControl fullWidth>
-                <InputLabel>Catégorie</InputLabel>
-                <Select
-                  value={filters.category}
-                  label="Catégorie"
-                  onChange={(e) => handleFilterChange('category', e.target.value)}
-                >
-                  <MenuItem value="">Toutes</MenuItem>
-                  <MenuItem value="beauty">Beauté</MenuItem>
-                  <MenuItem value="health">Santé</MenuItem>
-                  <MenuItem value="education">Éducation</MenuItem>
-                  <MenuItem value="home">Maison</MenuItem>
-                  <MenuItem value="other">Autre</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            {/* Catégorie */}
+            <FormControl fullWidth>
+              <InputLabel>Catégorie</InputLabel>
+              <Select
+                value={filters.category}
+                label="Catégorie"
+                onChange={(e) => handleFilterChange('category', e.target.value)}
+              >
+                <MenuItem value="">Toutes</MenuItem>
+                <MenuItem value="beauty">Beauté</MenuItem>
+                <MenuItem value="health">Santé</MenuItem>
+                <MenuItem value="education">Éducation</MenuItem>
+                <MenuItem value="home">Maison</MenuItem>
+                <MenuItem value="other">Autre</MenuItem>
+              </Select>
+            </FormControl>
           </Paper>
         </Grid>
 
+        {/* Résultats */}
         <Grid item xs={12} md={9}>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -217,4 +214,4 @@ const Search = () => {
   );
 };
 
-export default Search; 
+export default Search;

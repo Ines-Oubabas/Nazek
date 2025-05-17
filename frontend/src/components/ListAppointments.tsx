@@ -1,26 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Spinner from 'react-bootstrap/Spinner';
-import api from '../api';
-
-interface Appointment {
-  id: number;
-  client: {
-    name: string;
-    email: string;
-  };
-  employer: {
-    name: string;
-    service: string;
-  };
-  service?: {
-    name: string;
-  };
-  date: string;
-  description: string;
-  payment_method: string;
-  total_amount: number;
-  status: string;
-}
+import { appointmentAPI } from '@/services/api'; // ✅ corriger selon ton organisation
+import { Appointment } from '@/types'; // ✅ réutilise si défini dans types.ts
 
 const ListAppointments: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -28,7 +9,6 @@ const ListAppointments: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
 
-  // Récupérer la liste des rendez-vous
   useEffect(() => {
     fetchAppointments();
   }, []);
@@ -36,8 +16,8 @@ const ListAppointments: React.FC = () => {
   const fetchAppointments = async () => {
     setIsFetching(true);
     try {
-      const response = await api.get<Appointment[]>('/appointments/list/');
-      setAppointments(response.data);
+      const data = await appointmentAPI.getAll(); // ✅ corriger ici avec ton service API
+      setAppointments(data);
       setError(null);
     } catch (err) {
       setError('Erreur lors de la récupération des rendez-vous.');
@@ -47,17 +27,25 @@ const ListAppointments: React.FC = () => {
     }
   };
 
-  // Supprimer un rendez-vous
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Voulez-vous vraiment supprimer ce rendez-vous ?')) {
-      return;
-    }
-    
+    if (!window.confirm('Voulez-vous vraiment supprimer ce rendez-vous ?')) return;
+
     try {
-      await api.delete(`/appointments/${id}/`);
-      setAppointments((prevAppointments) => prevAppointments.filter((appointment) => appointment.id !== id));
-    } catch (err) {
+      await appointmentAPI.delete(id); // ✅ appel à ton service
+      setAppointments((prev) => prev.filter((a) => a.id !== id));
+    } catch {
       setError('Erreur lors de la suppression du rendez-vous.');
+    }
+  };
+
+  const getBadgeClass = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-warning';
+      case 'accepted': return 'bg-success';
+      case 'rejected': return 'bg-danger';
+      case 'completed': return 'bg-info';
+      case 'cancelled': return 'bg-secondary';
+      default: return 'bg-dark';
     }
   };
 
@@ -101,14 +89,14 @@ const ListAppointments: React.FC = () => {
           {appointments.map((appointment) => (
             <tr key={appointment.id}>
               <td>{appointment.id}</td>
-              <td>{appointment.client.name}</td>
-              <td>{appointment.employer.name}</td>
-              <td>{appointment.service?.name || 'N/A'}</td>
-              <td>{new Date(appointment.date).toLocaleString()}</td>
+              <td>{appointment.client.first_name} {appointment.client.last_name}</td>
+              <td>{appointment.employer.first_name} {appointment.employer.last_name}</td>
+              <td>{appointment.employer.service.name}</td>
+              <td>{new Date(appointment.date).toLocaleString('fr-FR')}</td>
               <td>{appointment.description || 'Aucune description'}</td>
               <td>{appointment.total_amount} DA</td>
               <td>
-                <span className={`badge ${appointment.status === 'en attente' ? 'bg-warning' : 'bg-success'}`}>
+                <span className={`badge ${getBadgeClass(appointment.status)}`}>
                   {appointment.status}
                 </span>
               </td>

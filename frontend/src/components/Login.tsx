@@ -1,132 +1,103 @@
+// frontend/src/pages/Login.tsx
+
 import React, { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Card, Form, Button, Alert } from 'react-bootstrap';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faLock, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  Container,
+  Box,
+  Typography,
+  TextField,
+  Button,
+  Link,
+  Alert,
+  Paper,
+} from '@mui/material';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface LocationState {
-  from: {
-    pathname: string;
-  };
-}
-
-const Login: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as LocationState)?.from?.pathname || '/';
-
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+const Login = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  const navigate = useNavigate();
+  const { login } = useAuth(); // Connexion JWT via AuthContext
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+
+    if (!email || !password) {
+      setError('Veuillez remplir tous les champs.');
+      return;
+    }
 
     try {
-      const response = await api.post('/auth/login/', formData);
-      localStorage.setItem('token', response.data.token);
-      navigate(from, { replace: true });
+      setError('');
+      setLoading(true);
+      await login(email, password);
+      navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Erreur lors de la connexion');
+      const message = err.response?.data?.detail || err.message || "Échec de la connexion. Vérifiez vos identifiants.";
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="container mt-5">
-      <div className="row justify-content-center">
-        <div className="col-md-6 col-lg-4">
+    <Container maxWidth="sm" className="mt-10 mb-6">
+      <Paper elevation={4} className="p-8 rounded-xl shadow-lg bg-white">
+        <Typography variant="h4" align="center" className="mb-4 font-bold text-primary">
+          Connexion
+        </Typography>
+
+        {error && (
+          <Alert severity="error" className="mb-4">
+            {error}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label="Adresse email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Mot de passe"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            margin="normal"
+            required
+          />
+
           <Button
-            variant="outline-primary"
-            className="mb-4"
-            onClick={() => navigate(-1)}
+            type="submit"
+            fullWidth
+            variant="contained"
+            color="primary"
+            disabled={loading}
+            className="mt-4"
           >
-            <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
-            Retour
+            {loading ? 'Connexion en cours...' : 'Se connecter'}
           </Button>
+        </form>
 
-          <Card>
-            <Card.Header className="text-center">
-              <h4 className="mb-0">Connexion</h4>
-            </Card.Header>
-            <Card.Body>
-              {error && (
-                <Alert variant="danger" className="mb-4">
-                  {error}
-                </Alert>
-              )}
-
-              <Form onSubmit={handleSubmit}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Email</Form.Label>
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <FontAwesomeIcon icon={faUser} />
-                    </span>
-                    <Form.Control
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      required
-                      placeholder="Entrez votre email"
-                    />
-                  </div>
-                </Form.Group>
-
-                <Form.Group className="mb-4">
-                  <Form.Label>Mot de passe</Form.Label>
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <FontAwesomeIcon icon={faLock} />
-                    </span>
-                    <Form.Control
-                      type="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      required
-                      placeholder="Entrez votre mot de passe"
-                    />
-                  </div>
-                </Form.Group>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-100"
-                  disabled={loading}
-                >
-                  {loading ? 'Connexion...' : 'Se connecter'}
-                </Button>
-              </Form>
-
-              <div className="text-center mt-4">
-                <p className="mb-0">
-                  Pas encore de compte ?{' '}
-                  <Link to="/register">Inscrivez-vous</Link>
-                </p>
-              </div>
-            </Card.Body>
-          </Card>
-        </div>
-      </div>
-    </div>
+        <Box className="text-center mt-6">
+          <Typography variant="body2">
+            Vous n'avez pas de compte ?{' '}
+            <Link component={RouterLink} to="/register" underline="hover">
+              Inscrivez-vous
+            </Link>
+          </Typography>
+        </Box>
+      </Paper>
+    </Container>
   );
 };
 

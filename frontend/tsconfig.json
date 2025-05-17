@@ -13,9 +13,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "baseUrl": "./src", // Simplifie les imports relatifs
+    "baseUrl": "./src",
     "paths": {
-      "*": ["*"] // Alias simple pour tous les fichiers
+      "@/*": ["*"]
     }
   },
   "include": ["src"],

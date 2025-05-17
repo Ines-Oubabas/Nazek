@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Button, Card, Alert, Spinner, Row, Col } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCalendar, faClock, faMapMarkerAlt, faInfoCircle, faUserTie } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
-import { Service, Employer, Availability } from '../types';
+import { appointmentAPI, employerAPI, serviceAPI } from '@/services/api';
+import { Service, Employer, Availability, AppointmentCreation } from '@/types';
+
+// Type personnalisé pour gérer les éléments de formulaire de react-bootstrap
+type FormControlElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
 const CreateAppointment: React.FC = () => {
   const navigate = useNavigate();
@@ -12,69 +15,77 @@ const CreateAppointment: React.FC = () => {
   const [employers, setEmployers] = useState<Employer[]>([]);
   const [selectedService, setSelectedService] = useState<number | null>(null);
   const [selectedEmployer, setSelectedEmployer] = useState<number | null>(null);
-  const [employerAvailabilities, setEmployerAvailabilities] = useState<Availability[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
-
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AppointmentCreation>({
     date: '',
     time: '',
     description: '',
     location: '',
     estimated_duration: 60,
     payment_method: 'especes',
+    service: 0,
+    employer: 0,
   });
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const response = await api.get('/services/');
-        setServices(response.data);
-      } catch (err) {
-        setError('Erreur lors du chargement des services');
+        const data = await serviceAPI.list();
+        if (Array.isArray(data)) {
+          setServices(data);
+        } else {
+          throw new Error('Invalid data format');
+        }
+      } catch {
+        setError('Erreur lors du chargement des services.');
       }
     };
     fetchServices();
   }, []);
 
   useEffect(() => {
+    if (!selectedService) return;
     const fetchEmployers = async () => {
-      if (selectedService) {
-        try {
-          const response = await api.get(`/employers/?service=${selectedService}`);
-          setEmployers(response.data);
-        } catch (err) {
-          setError('Erreur lors du chargement des employeurs');
+      try {
+        const data = await employerAPI.list(selectedService);
+        if (Array.isArray(data)) {
+          setEmployers(data);
+        } else {
+          throw new Error('Invalid data format');
         }
+      } catch {
+        setError('Erreur lors du chargement des employeurs.');
       }
     };
     fetchEmployers();
   }, [selectedService]);
 
   useEffect(() => {
-    const fetchAvailabilities = async () => {
-      if (selectedEmployer) {
-        try {
-          const response = await api.get(`/employers/${selectedEmployer}/availability/`);
-          setEmployerAvailabilities(response.data);
-          generateTimeSlots(response.data);
-        } catch (err) {
-          setError('Erreur lors du chargement des disponibilités');
+    if (!selectedEmployer) return;
+    const fetchAvailability = async () => {
+      try {
+        const data = await employerAPI.availability(selectedEmployer);
+        if (Array.isArray(data)) {
+          generateTimeSlots(data);
+        } else {
+          throw new Error('Invalid data format');
         }
+      } catch {
+        setError('Erreur lors du chargement des disponibilités.');
       }
     };
-    fetchAvailabilities();
+    fetchAvailability();
   }, [selectedEmployer]);
 
   const generateTimeSlots = (availabilities: Availability[]) => {
     const slots: string[] = [];
-    availabilities.forEach(availability => {
+    availabilities.forEach((availability) => {
       const start = new Date(`1970-01-01T${availability.start_time}`);
       const end = new Date(`1970-01-01T${availability.end_time}`);
       let current = new Date(start);
-
       while (current < end) {
         slots.push(current.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
         current.setMinutes(current.getMinutes() + 30);
@@ -83,36 +94,28 @@ const CreateAppointment: React.FC = () => {
     setAvailableTimeSlots(slots);
   };
 
-  const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const serviceId = parseInt(e.target.value);
-    setSelectedService(serviceId);
-    setSelectedEmployer(null);
-    setFormData({ ...formData, date: '', time: '' });
-  };
+  const handleChange = (e: React.ChangeEvent<FormControlElement>) => {
+    const { name, value } = e.target;
 
-  const handleEmployerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const employerId = parseInt(e.target.value);
-    setSelectedEmployer(employerId);
-    setFormData({ ...formData, date: '', time: '' });
+    // Si le champ est numérique, convertissez la valeur en nombre
+    const parsedValue = name === 'estimated_duration' ? parseInt(value, 10) : value;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: parsedValue,
+    }));
   };
 
   const validateForm = () => {
-    if (!selectedService || !selectedEmployer || !formData.date || !formData.time) {
-      setError('Veuillez remplir tous les champs obligatoires');
+    if (!selectedService || !selectedEmployer || !formData.date || !formData.time || !formData.location) {
+      setError('Veuillez remplir tous les champs obligatoires.');
       return false;
     }
-
     const selectedDate = new Date(`${formData.date}T${formData.time}`);
     if (selectedDate < new Date()) {
-      setError('La date et l\'heure doivent être dans le futur');
+      setError('La date et l\'heure doivent être dans le futur.');
       return false;
     }
-
-    if (!formData.location) {
-      setError('Veuillez spécifier l\'adresse du rendez-vous');
-      return false;
-    }
-
     return true;
   };
 
@@ -126,18 +129,16 @@ const CreateAppointment: React.FC = () => {
 
     try {
       const dateTime = new Date(`${formData.date}T${formData.time}`);
-      const appointmentData = {
+      await appointmentAPI.create({
         ...formData,
-        employer: selectedEmployer,
-        service: selectedService,
+        service: selectedService!,
+        employer: selectedEmployer!,
         date: dateTime.toISOString(),
-      };
-
-      const response = await api.post('/appointments/create/', appointmentData);
-      setSuccessMessage('Rendez-vous créé avec succès ! Vous serez notifié de la réponse de l\'employeur.');
+      });
+      setSuccessMessage('Rendez-vous créé avec succès ! Vous serez notifié de la réponse.');
       setTimeout(() => navigate('/client/profile'), 2000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erreur lors de la création du rendez-vous');
+      setError(err.response?.data?.error || 'Erreur lors de la création du rendez-vous.');
     } finally {
       setLoading(false);
     }
@@ -147,33 +148,25 @@ const CreateAppointment: React.FC = () => {
     <div className="container mt-5">
       <Card className="shadow-sm">
         <Card.Header className="bg-primary text-white">
-          <h2 className="mb-0">
-            <FontAwesomeIcon icon={faCalendar} className="me-2" />
-            Créer un Rendez-vous
-          </h2>
+          <h2 className="mb-0">Créer un Rendez-vous</h2>
         </Card.Header>
         <Card.Body>
           {error && <Alert variant="danger">{error}</Alert>}
           {successMessage && <Alert variant="success">{successMessage}</Alert>}
 
           <Form onSubmit={handleSubmit}>
-            <Row>
+            <Row className="mb-3">
               <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                    Service
-                  </Form.Label>
-                  <Form.Select
-                    value={selectedService || ''}
-                    onChange={handleServiceChange}
-                    required
-                  >
+                <Form.Group>
+                  <Form.Label><FontAwesomeIcon icon={faInfoCircle} className="me-2" /> Service</Form.Label>
+                  <Form.Select name="service" value={selectedService ?? ''} onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    setSelectedService(value);
+                    setFormData((prev) => ({ ...prev, service: value }));
+                  }} required>
                     <option value="">Sélectionnez un service</option>
-                    {services.map(service => (
-                      <option key={service.id} value={service.id}>
-                        {service.name}
-                      </option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
                   </Form.Select>
                 </Form.Group>
@@ -181,20 +174,17 @@ const CreateAppointment: React.FC = () => {
 
               {selectedService && (
                 <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>
-                      <FontAwesomeIcon icon={faUserTie} className="me-2" />
-                      Prestataire
-                    </Form.Label>
-                    <Form.Select
-                      value={selectedEmployer || ''}
-                      onChange={handleEmployerChange}
-                      required
-                    >
+                  <Form.Group>
+                    <Form.Label><FontAwesomeIcon icon={faUserTie} className="me-2" /> Prestataire</Form.Label>
+                    <Form.Select name="employer" value={selectedEmployer ?? ''} onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      setSelectedEmployer(value);
+                      setFormData((prev) => ({ ...prev, employer: value }));
+                    }} required>
                       <option value="">Sélectionnez un prestataire</option>
-                      {employers.map(employer => (
+                      {employers.map((employer) => (
                         <option key={employer.id} value={employer.id}>
-                          {employer.name} - {employer.average_rating.toFixed(1)} ⭐ ({employer.total_reviews} avis)
+                          {employer.first_name} {employer.last_name} - {employer.average_rating.toFixed(1)}⭐
                         </option>
                       ))}
                     </Form.Select>
@@ -205,17 +195,15 @@ const CreateAppointment: React.FC = () => {
 
             {selectedEmployer && (
               <>
-                <Row>
+                <Row className="mb-3">
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>
-                        <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                        Date
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label><FontAwesomeIcon icon={faCalendar} className="me-2" /> Date</Form.Label>
                       <Form.Control
                         type="date"
+                        name="date"
                         value={formData.date}
-                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        onChange={handleChange}
                         min={new Date().toISOString().split('T')[0]}
                         required
                       />
@@ -223,21 +211,17 @@ const CreateAppointment: React.FC = () => {
                   </Col>
 
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>
-                        <FontAwesomeIcon icon={faClock} className="me-2" />
-                        Heure
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label><FontAwesomeIcon icon={faClock} className="me-2" /> Heure</Form.Label>
                       <Form.Select
+                        name="time"
                         value={formData.time}
-                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                        onChange={handleChange}
                         required
                       >
                         <option value="">Sélectionnez une heure</option>
-                        {availableTimeSlots.map(slot => (
-                          <option key={slot} value={slot}>
-                            {slot}
-                          </option>
+                        {availableTimeSlots.map((slot) => (
+                          <option key={slot} value={slot}>{slot}</option>
                         ))}
                       </Form.Select>
                     </Form.Group>
@@ -245,77 +229,18 @@ const CreateAppointment: React.FC = () => {
                 </Row>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>
-                    <FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" />
-                    Adresse
-                  </Form.Label>
+                  <Form.Label><FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" /> Adresse</Form.Label>
                   <Form.Control
                     type="text"
+                    name="location"
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    onChange={handleChange}
                     required
                   />
                 </Form.Group>
 
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Durée estimée (minutes)</Form.Label>
-                      <Form.Control
-                        type="number"
-                        value={formData.estimated_duration}
-                        onChange={(e) => setFormData({ ...formData, estimated_duration: parseInt(e.target.value) })}
-                        min="30"
-                        step="30"
-                        required
-                      />
-                    </Form.Group>
-                  </Col>
-
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Mode de paiement</Form.Label>
-                      <Form.Select
-                        value={formData.payment_method}
-                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                      >
-                        <option value="especes">Espèces</option>
-                        <option value="carte">Carte Dahabiya</option>
-                      </Form.Select>
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Description</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={3}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  />
-                </Form.Group>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-100"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Spinner
-                        as="span"
-                        animation="border"
-                        size="sm"
-                        role="status"
-                        aria-hidden="true"
-                      />
-                      <span className="ms-2">Création en cours...</span>
-                    </>
-                  ) : (
-                    'Créer le rendez-vous'
-                  )}
+                <Button type="submit" variant="primary" className="w-100" disabled={loading}>
+                  {loading ? (<><Spinner as="span" animation="border" size="sm" /> Création en cours...</>) : "Créer le rendez-vous"}
                 </Button>
               </>
             )}

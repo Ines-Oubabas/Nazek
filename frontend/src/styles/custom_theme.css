@@ -1,0 +1,62 @@
+/* 🎨 Modes clair et sombre */
+
+/* 🌞 Thème clair (défaut) */
+body.light-mode {
+  background-color: var(--light-color);
+  color: var(--dark-color);
+}
+
+/* 🌙 Thème sombre */
+body.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+/* Navbar */
+body.dark-mode .navbar {
+  background-color: #1f1f1f !important;
+}
+body.dark-mode .navbar-brand,
+body.dark-mode .nav-link {
+  color: #e0e0e0 !important;
+}
+body.dark-mode .nav-link:hover {
+  color: var(--primary-color) !important;
+}
+
+/* Cards */
+body.dark-mode .card {
+  background-color: #1f1f1f;
+  color: #e0e0e0;
+}
+body.dark-mode .card-header {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+/* Buttons */
+body.dark-mode .btn-primary {
+  background-color: #0056b3;
+  border-color: #0056b3;
+}
+body.dark-mode .btn-primary:hover {
+  background-color: #003d80;
+}
+
+/* Tables */
+body.dark-mode .table {
+  background-color: #1f1f1f;
+  color: #e0e0e0;
+}
+body.dark-mode .thead-dark {
+  background-color: #333;
+}
+
+/* Footer */
+body.dark-mode footer {
+  background-color: #1f1f1f;
+  color: #e0e0e0;
+}
+body.dark-mode footer a:hover {
+  color: var(--primary-color);
+}

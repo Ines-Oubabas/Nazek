@@ -1,7 +1,9 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = 'http://127.0.0.1:8000/api';
+// ✅ Variable d'environnement ou fallback
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 
+// ✅ Instance Axios
 const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
@@ -10,30 +12,29 @@ const api: AxiosInstance = axios.create({
   timeout: 10000,
 });
 
-// Intercepteur pour ajouter le token aux requêtes
+// ✅ Intercepteur de requête
 api.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Intercepteur pour gérer les erreurs
+// ✅ Intercepteur de réponse
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
 
-export default api; 
+export default api;

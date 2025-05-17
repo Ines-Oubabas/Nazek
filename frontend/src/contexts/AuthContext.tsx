@@ -1,20 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../api';
-import { User } from '../types';
+import { authAPI } from '@/services/api';
+import { User } from '@/types';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: any) => Promise<void>;
+  register: (userData: Partial<User>) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
@@ -24,12 +24,12 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Charger l'utilisateur au montage si un token existe
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access');
     if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
     } else {
       setIsLoading(false);
@@ -38,12 +38,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUser = async () => {
     try {
-      const response = await api.get('/auth/user/');
-      setUser(response.data);
-    } catch (error) {
-      localStorage.removeItem('token');
-      delete api.defaults.headers.common['Authorization'];
-      setUser(null);
+      const data = await authAPI.getUser();
+      setUser(data);
+    } catch (err) {
+      console.error('Erreur lors de la récupération du profil utilisateur.');
+      logout();
     } finally {
       setIsLoading(false);
     }
@@ -51,51 +50,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await api.post('/auth/login/', { email, password });
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Erreur de connexion');
+      const res = await authAPI.login({ email, password });
+      localStorage.setItem('access', res.access);
+      localStorage.setItem('refresh', res.refresh);
+      await fetchUser(); // Recharge le profil utilisateur après connexion
+    } catch (err) {
+      throw new Error('Échec de la connexion. Vérifiez vos identifiants.');
     }
   };
 
-  const register = async (userData: any) => {
+  const register = async (userData: Partial<User>) => {
     try {
-      const response = await api.post('/auth/register/', userData);
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Erreur d\'inscription');
+      await authAPI.register(userData);
+    } catch (err) {
+      throw new Error('Échec de l\'inscription. Veuillez réessayer.');
     }
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    delete api.defaults.headers.common['Authorization'];
+    localStorage.removeItem('access');
+    localStorage.removeItem('refresh');
     setUser(null);
   };
 
   const updateUser = async (userData: Partial<User>) => {
     try {
-      const response = await api.patch('/auth/user/', userData);
-      setUser(response.data);
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Erreur de mise à jour du profil');
+      const updatedUser = await authAPI.updateUser(userData);
+      setUser(updatedUser);
+    } catch (err) {
+      throw new Error('Erreur lors de la mise à jour du profil.');
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
     login,
     register,
     logout,
-    updateUser
+    updateUser,
   };
 
   return (
@@ -103,4 +97,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       {!isLoading && children}
     </AuthContext.Provider>
   );
-}; 
+};

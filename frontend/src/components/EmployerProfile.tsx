@@ -1,27 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Alert, Spinner, ListGroup, Badge, Form } from 'react-bootstrap';
+import { Card, Row, Col, Button, Alert, Spinner, ListGroup, Badge } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faUser,
-  faEnvelope,
-  faPhone,
-  faMapMarkerAlt,
-  faCalendarAlt,
-  faClock,
-  faUserTie,
-  faStar,
-  faEdit,
-  faHistory,
-  faCog,
-  faSignOutAlt,
-  faMoneyBillWave,
-  faCheckCircle,
-  faTimesCircle,
-  faTools
+  faUser, faEnvelope, faPhone, faMapMarkerAlt, faCalendarAlt, faClock,
+  faUserTie, faStar, faEdit, faHistory, faCog, faSignOutAlt,
+  faMoneyBillWave, faCheckCircle, faTimesCircle, faTools
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
-import { User, Appointment, Service, Availability } from '../types';
+
+import { appointmentAPI, userAPI, getServices, employerAPI } from '@/services/api';
+import { User, Appointment, Service, Availability, Client } from '@/types';
 
 const EmployerProfile: React.FC = () => {
   const navigate = useNavigate();
@@ -37,16 +25,15 @@ const EmployerProfile: React.FC = () => {
     const fetchEmployerData = async () => {
       try {
         const [userResponse, appointmentsResponse, servicesResponse, availabilitiesResponse] = await Promise.all([
-          api.get('/users/me/'),
-          api.get('/appointments/employer/'),
-          api.get('/services/'),
-          api.get('/employers/me/availability/')
+          userAPI.getProfile(),
+          appointmentAPI.getAll(),
+          getServices(),
+          employerAPI.getAvailability(1) // Remplace 1 par l'ID du user si dispo
         ]);
-
-        setUser(userResponse.data);
-        setAppointments(appointmentsResponse.data);
-        setServices(servicesResponse.data);
-        setAvailabilities(availabilitiesResponse.data);
+        setUser(userResponse);
+        setAppointments(appointmentsResponse);
+        setServices(servicesResponse);
+        setAvailabilities(availabilitiesResponse);
       } catch (err: any) {
         setError(err.response?.data?.error || 'Erreur lors du chargement des données');
       } finally {
@@ -62,10 +49,10 @@ const EmployerProfile: React.FC = () => {
     navigate('/login');
   };
 
-  const handleStatusUpdate = async (appointmentId: number, status: string) => {
+  const handleStatusUpdate = async (appointmentId: number, status: Appointment['status']) => {
     try {
-      await api.patch(`/appointments/${appointmentId}/`, { status });
-      setAppointments(appointments.map(apt => 
+      await appointmentAPI.update(appointmentId, { status });
+      setAppointments(appointments.map(apt =>
         apt.id === appointmentId ? { ...apt, status } : apt
       ));
       setSuccessMessage('Statut du rendez-vous mis à jour avec succès');
@@ -74,7 +61,7 @@ const EmployerProfile: React.FC = () => {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: Appointment['status']) => {
     const variants = {
       pending: 'warning',
       accepted: 'success',
@@ -82,7 +69,12 @@ const EmployerProfile: React.FC = () => {
       completed: 'info',
       cancelled: 'secondary'
     };
-    return <Badge bg={variants[status as keyof typeof variants]}>{status}</Badge>;
+    return <Badge bg={variants[status]}>{status}</Badge>;
+  };
+
+  const getDayName = (dayOfWeek: number) => {
+    const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    return days[dayOfWeek];
   };
 
   if (loading) {
@@ -96,11 +88,7 @@ const EmployerProfile: React.FC = () => {
   }
 
   if (error || !user) {
-    return (
-      <Alert variant="danger">
-        {error || 'Erreur lors du chargement du profil'}
-      </Alert>
-    );
+    return <Alert variant="danger">{error || 'Erreur lors du chargement du profil'}</Alert>;
   }
 
   return (
@@ -117,7 +105,6 @@ const EmployerProfile: React.FC = () => {
               />
               <h3 className="mb-3">{user.first_name} {user.last_name}</h3>
               <p className="text-muted mb-4">@{user.username}</p>
-
               <div className="d-grid gap-2">
                 <Button variant="outline-primary" onClick={() => navigate('/profile/edit')}>
                   <FontAwesomeIcon icon={faEdit} className="me-2" />
@@ -137,35 +124,16 @@ const EmployerProfile: React.FC = () => {
 
           <Card className="shadow-sm mb-4">
             <Card.Body>
-              <h4 className="mb-4">
-                <FontAwesomeIcon icon={faUser} className="me-2" />
-                Informations personnelles
-              </h4>
-
-              <div className="mb-3">
-                <FontAwesomeIcon icon={faEnvelope} className="me-2 text-primary" />
-                <span>{user.email}</span>
-              </div>
-
-              <div className="mb-3">
-                <FontAwesomeIcon icon={faPhone} className="me-2 text-primary" />
-                <span>{user.phone || 'Non renseigné'}</span>
-              </div>
-
-              <div className="mb-3">
-                <FontAwesomeIcon icon={faMapMarkerAlt} className="me-2 text-primary" />
-                <span>{user.address || 'Non renseignée'}</span>
-              </div>
+              <h4 className="mb-4"><FontAwesomeIcon icon={faUser} className="me-2" /> Informations personnelles</h4>
+              <div className="mb-3"><FontAwesomeIcon icon={faEnvelope} className="me-2 text-primary" />{user.email}</div>
+              <div className="mb-3"><FontAwesomeIcon icon={faPhone} className="me-2 text-primary" />{user.phone || 'Non renseigné'}</div>
+              <div className="mb-3"><FontAwesomeIcon icon={faMapMarkerAlt} className="me-2 text-primary" />{user.address || 'Non renseignée'}</div>
             </Card.Body>
           </Card>
 
           <Card className="shadow-sm">
             <Card.Body>
-              <h4 className="mb-4">
-                <FontAwesomeIcon icon={faTools} className="me-2" />
-                Services proposés
-              </h4>
-
+              <h4 className="mb-4"><FontAwesomeIcon icon={faTools} className="me-2" /> Services proposés</h4>
               <div className="d-flex flex-wrap gap-2">
                 {services.map(service => (
                   <Badge key={service.id} bg="primary" className="p-2">
@@ -181,10 +149,7 @@ const EmployerProfile: React.FC = () => {
           <Card className="shadow-sm mb-4">
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-4">
-                <h4 className="mb-0">
-                  <FontAwesomeIcon icon={faHistory} className="me-2" />
-                  Rendez-vous
-                </h4>
+                <h4 className="mb-0"><FontAwesomeIcon icon={faHistory} className="me-2" /> Rendez-vous</h4>
                 <Button variant="primary" onClick={() => navigate('/availability/edit')}>
                   <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
                   Gérer les disponibilités
@@ -205,53 +170,33 @@ const EmployerProfile: React.FC = () => {
                         <div>
                           <h5 className="mb-1">
                             <FontAwesomeIcon icon={faUser} className="me-2" />
-                            {appointment.client}
+                            {appointment.client.first_name} {appointment.client.last_name}
                           </h5>
                           <div className="text-muted">
                             <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                            {new Date(appointment.date).toLocaleDateString('fr-FR')}
-                            {' - '}
+                            {new Date(appointment.date).toLocaleDateString('fr-FR')} {' - '}
                             <FontAwesomeIcon icon={faClock} className="me-2" />
                             {new Date(appointment.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
-                        <div>
-                          {getStatusBadge(appointment.status)}
-                        </div>
+                        <div>{getStatusBadge(appointment.status)}</div>
                       </div>
                       <p className="mb-2">{appointment.description}</p>
                       <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" />
-                          {appointment.location}
-                        </div>
+                        <div><FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" />{appointment.location}</div>
                         <div>
                           {appointment.status === 'pending' && (
                             <div className="d-flex gap-2">
-                              <Button
-                                variant="success"
-                                size="sm"
-                                onClick={() => handleStatusUpdate(appointment.id, 'accepted')}
-                              >
-                                <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-                                Accepter
+                              <Button size="sm" variant="success" onClick={() => handleStatusUpdate(appointment.id, 'accepted')}>
+                                <FontAwesomeIcon icon={faCheckCircle} className="me-1" /> Accepter
                               </Button>
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => handleStatusUpdate(appointment.id, 'rejected')}
-                              >
-                                <FontAwesomeIcon icon={faTimesCircle} className="me-1" />
-                                Refuser
+                              <Button size="sm" variant="danger" onClick={() => handleStatusUpdate(appointment.id, 'rejected')}>
+                                <FontAwesomeIcon icon={faTimesCircle} className="me-1" /> Refuser
                               </Button>
                             </div>
                           )}
                           {appointment.status === 'accepted' && (
-                            <Button
-                              variant="info"
-                              size="sm"
-                              onClick={() => handleStatusUpdate(appointment.id, 'completed')}
-                            >
+                            <Button size="sm" variant="info" onClick={() => handleStatusUpdate(appointment.id, 'completed')}>
                               Marquer comme terminé
                             </Button>
                           )}
@@ -261,20 +206,14 @@ const EmployerProfile: React.FC = () => {
                   ))}
                 </ListGroup>
               ) : (
-                <div className="text-center py-4">
-                  <p className="text-muted mb-3">Aucun rendez-vous pour le moment</p>
-                </div>
+                <div className="text-center py-4"><p className="text-muted mb-3">Aucun rendez-vous pour le moment</p></div>
               )}
             </Card.Body>
           </Card>
 
           <Card className="shadow-sm">
             <Card.Body>
-              <h4 className="mb-4">
-                <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                Disponibilités
-              </h4>
-
+              <h4 className="mb-4"><FontAwesomeIcon icon={faCalendarAlt} className="me-2" /> Disponibilités</h4>
               <ListGroup>
                 {availabilities.map(availability => (
                   <ListGroup.Item key={availability.id}>
@@ -297,4 +236,4 @@ const EmployerProfile: React.FC = () => {
   );
 };
 
-export default EmployerProfile; 
+export default EmployerProfile;

@@ -35,6 +35,16 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
     }));
   };
 
+  const handleReset = () => {
+    setFormData({
+      serviceFor: 'self',
+      email: '',
+      phone: '',
+      address: '',
+      notes: '',
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit({
@@ -86,37 +96,17 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
                   value={formData.serviceFor}
                   onChange={handleChange}
                   sx={{
-                    '& .MuiFormControlLabel-root': {
-                      marginRight: 4,
-                    },
+                    '& .MuiFormControlLabel-root': { marginRight: 4 },
                   }}
                 >
                   <FormControlLabel
                     value="self"
-                    control={
-                      <Radio
-                        sx={{
-                          color: theme.palette.primary.main,
-                          '&.Mui-checked': {
-                            color: theme.palette.primary.main,
-                          },
-                        }}
-                      />
-                    }
+                    control={<Radio sx={{ color: theme.palette.primary.main, '&.Mui-checked': { color: theme.palette.primary.main } }} />}
                     label="Moi-même"
                   />
                   <FormControlLabel
                     value="other"
-                    control={
-                      <Radio
-                        sx={{
-                          color: theme.palette.primary.main,
-                          '&.Mui-checked': {
-                            color: theme.palette.primary.main,
-                          },
-                        }}
-                      />
-                    }
+                    control={<Radio sx={{ color: theme.palette.primary.main, '&.Mui-checked': { color: theme.palette.primary.main } }} />}
                     label="Un proche"
                   />
                 </RadioGroup>
@@ -132,13 +122,6 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    '&:hover fieldset': {
-                      borderColor: theme.palette.primary.main,
-                    },
-                  },
-                }}
               />
             </Grid>
 
@@ -150,13 +133,8 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
                 value={formData.phone}
                 onChange={handleChange}
                 required
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    '&:hover fieldset': {
-                      borderColor: theme.palette.primary.main,
-                    },
-                  },
-                }}
+                inputProps={{ pattern: '[0-9]{10}' }}
+                helperText="Format : 0612345678"
               />
             </Grid>
 
@@ -170,13 +148,6 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
                 required
                 multiline
                 rows={2}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    '&:hover fieldset': {
-                      borderColor: theme.palette.primary.main,
-                    },
-                  },
-                }}
               />
             </Grid>
 
@@ -189,27 +160,16 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
                 onChange={handleChange}
                 multiline
                 rows={4}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    '&:hover fieldset': {
-                      borderColor: theme.palette.primary.main,
-                    },
-                  },
-                }}
               />
             </Grid>
           </Grid>
         </DialogContent>
+
         <DialogActions sx={{ p: 3 }}>
-          <Button
-            onClick={onClose}
-            sx={{
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                background: 'rgba(0, 0, 0, 0.04)',
-              },
-            }}
-          >
+          <Button onClick={handleReset} sx={{ color: theme.palette.text.secondary }}>
+            Réinitialiser
+          </Button>
+          <Button onClick={onClose} sx={{ color: theme.palette.text.secondary }}>
             Annuler
           </Button>
           <Button
@@ -232,4 +192,4 @@ const AppointmentForm = ({ open, onClose, onSubmit, service, provider }) => {
   );
 };
 
-export default AppointmentForm; 
+export default AppointmentForm;

@@ -9,7 +9,7 @@ import {
   faCalendarAlt,
   faClock
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
+import { appointmentAPI } from '@/services/api';
 
 interface Appointment {
   id: number;
@@ -42,8 +42,8 @@ const AppointmentReview: React.FC = () => {
   useEffect(() => {
     const fetchAppointment = async () => {
       try {
-        const response = await api.get(`/appointments/${id}/`);
-        setAppointment(response.data);
+        const data = await appointmentAPI.detail(Number(id));
+        setAppointment(data);
       } catch (err) {
         setError('Erreur lors du chargement du rendez-vous');
         console.error(err);
@@ -78,7 +78,7 @@ const AppointmentReview: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await api.post(`/appointments/${id}/review/`, formData);
+      await appointmentAPI.review(Number(id), formData);
       navigate(`/appointments/${id}`);
     } catch (err) {
       setError('Erreur lors de l\'envoi de l\'avis');
@@ -206,4 +206,4 @@ const AppointmentReview: React.FC = () => {
   );
 };
 
-export default AppointmentReview; 
+export default AppointmentReview;

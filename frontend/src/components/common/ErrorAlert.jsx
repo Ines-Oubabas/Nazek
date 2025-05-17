@@ -1,32 +1,22 @@
 import React from 'react';
 import { Alert, Box, Button, Fade } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
 
-const ErrorAlert = ({ message, onRetry }) => {
-  const theme = useTheme();
-
+const ErrorAlert = ({ message = 'Une erreur est survenue', onRetry, severity = 'error' }) => {
   return (
-    <Fade in timeout={500}>
+    <Fade in timeout={300}>
       <Box
         sx={{
           p: 2,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
           borderRadius: 2,
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          boxShadow: 3,
         }}
       >
         <Alert
-          severity="error"
-          sx={{
-            '& .MuiAlert-icon': {
-              color: theme.palette.error.main,
-            },
-            '& .MuiAlert-message': {
-              color: theme.palette.error.dark,
-            },
-          }}
+          severity={severity}
+          variant="filled"
           action={
             onRetry && (
               <Button
@@ -34,17 +24,18 @@ const ErrorAlert = ({ message, onRetry }) => {
                 size="small"
                 startIcon={<RefreshIcon />}
                 onClick={onRetry}
-                sx={{
-                  color: theme.palette.error.main,
-                  '&:hover': {
-                    background: 'rgba(211, 47, 47, 0.1)',
-                  },
-                }}
               >
                 Réessayer
               </Button>
             )
           }
+          sx={{
+            alignItems: 'center',
+            '& .MuiAlert-message': {
+              fontWeight: 500,
+              fontSize: '0.95rem',
+            },
+          }}
         >
           {message}
         </Alert>
@@ -53,4 +44,4 @@ const ErrorAlert = ({ message, onRetry }) => {
   );
 };
 
-export default ErrorAlert; 
+export default ErrorAlert;

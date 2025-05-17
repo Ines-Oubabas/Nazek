@@ -1,3 +1,5 @@
+# appointments/views.py corrigé complet
+
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -24,12 +26,14 @@ from .serializers import (
 
 User = get_user_model()
 
+
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
     return {
         "refresh": str(refresh),
         "access": str(refresh.access_token),
     }
+
 
 def create_notification(user, notification_type, title, message, appointment=None):
     Notification.objects.create(
@@ -39,6 +43,7 @@ def create_notification(user, notification_type, title, message, appointment=Non
         message=message,
         appointment=appointment
     )
+
 
 class RegisterView(APIView):
     def post(self, request):
@@ -60,6 +65,7 @@ class RegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class LoginView(APIView):
     def post(self, request):
         email = request.data.get('email')
@@ -79,6 +85,7 @@ class LoginView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'Utilisateur non trouvé'}, status=status.HTTP_404_NOT_FOUND)
 
+
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -91,44 +98,38 @@ class LogoutView(APIView):
         except Exception:
             return Response({'error': 'Token invalide'}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class AppointmentList(generics.ListCreateAPIView):
     serializer_class = AppointmentSerializer
     queryset = Appointment.objects.all()
+
 
 class CreateAppointment(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            data = request.data.copy()
+        data = request.data.copy()
 
-            if "date" in data and isinstance(data["date"], str):
-                try:
-                    data["date"] = datetime.fromisoformat(data["date"].replace("Z", "+00:00"))
-                except ValueError:
-                    return Response({"error": "Format de date invalide. Utilisez ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)."},
-                                    status=status.HTTP_400_BAD_REQUEST)
+        if "date" in data and isinstance(data["date"], str):
+            try:
+                data["date"] = datetime.fromisoformat(data["date"].replace("Z", "+00:00"))
+            except ValueError:
+                return Response({"error": "Format de date invalide. Utilisez ISO 8601."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = AppointmentSerializer(data=data)
-            if serializer.is_valid():
-                appointment = serializer.save(client=request.user.client)
-                create_notification(
-                    user=appointment.employer.user,
-                    notification_type='appointment_request',
-                    title='Nouvelle demande de rendez-vous',
-                    message=f'Un nouveau rendez-vous a été demandé par {appointment.client.name}',
-                    appointment=appointment
-                )
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = AppointmentSerializer(data=data)
+        if serializer.is_valid():
+            appointment = serializer.save(client=request.user.client)
+            create_notification(
+                user=appointment.employer.user,
+                notification_type='appointment_request',
+                title='Nouvelle demande de rendez-vous',
+                message=f'Un nouveau rendez-vous a été demandé par {appointment.client.name}',
+                appointment=appointment
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        except AttributeError:
-            return Response({"error": "Le client associé à cet utilisateur est introuvable."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        except ValidationError as ve:
-            return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AppointmentDetail(RetrieveUpdateDestroyAPIView):
     queryset = Appointment.objects.all()
@@ -160,9 +161,11 @@ class AppointmentDetail(RetrieveUpdateDestroyAPIView):
 
         return Response(serializer.data)
 
+
 class ClientList(generics.ListAPIView):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
+
 
 class ClientProfile(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
@@ -171,20 +174,22 @@ class ClientProfile(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user.client
 
+
 class EmployerList(ListAPIView):
-    queryset = Employer.objects.filter(is_active=True)
     serializer_class = EmployerSerializer
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        service_id = self.request.query_params.get('service', None)
+        queryset = Employer.objects.filter(is_active=True)
+        service_id = self.request.query_params.get('service')
         if service_id:
             queryset = queryset.filter(service_id=service_id)
         return queryset
 
+
 class EmployerUpdate(generics.RetrieveUpdateAPIView):
     queryset = Employer.objects.all()
     serializer_class = EmployerUpdateSerializer
+
 
 class EmployerProfile(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
@@ -193,13 +198,16 @@ class EmployerProfile(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user.employer
 
+
 class ServiceList(ListAPIView):
     queryset = Service.objects.filter(is_active=True)
     serializer_class = ServiceSerializer
 
+
 class ServiceDetail(RetrieveUpdateDestroyAPIView):
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
+
 
 class AddReview(generics.UpdateAPIView):
     queryset = Appointment.objects.all()
@@ -211,16 +219,14 @@ class AddReview(generics.UpdateAPIView):
         rating = request.data.get("rating")
 
         if feedback is None or rating is None:
-            return Response(
-                {"error": "Les champs 'feedback' et 'rating' sont obligatoires."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "Feedback et évaluation obligatoires."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         instance.feedback = feedback
         instance.rating = rating
         instance.save()
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(instance).data)
+
 
 class EmployerAvailability(APIView):
     permission_classes = [IsAuthenticated]
@@ -245,29 +251,27 @@ class EmployerAvailability(APIView):
         except Employer.DoesNotExist:
             return Response({"error": "Employeur non trouvé"}, status=status.HTTP_404_NOT_FOUND)
 
+
 class NotificationList(ListAPIView):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(
-            recipient=self.request.user
-        ).order_by('-created_at')
+        return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
+
 
 class MarkNotificationRead(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, notification_id):
         try:
-            notification = Notification.objects.get(
-                id=notification_id,
-                recipient=request.user
-            )
+            notification = Notification.objects.get(id=notification_id, recipient=request.user)
             notification.is_read = True
             notification.save()
             return Response({"message": "Notification marquée comme lue"})
         except Notification.DoesNotExist:
             return Response({"error": "Notification non trouvée"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class AppointmentReview(APIView):
     permission_classes = [IsAuthenticated]
@@ -282,13 +286,14 @@ class AppointmentReview(APIView):
                     user=appointment.employer.user,
                     notification_type='review_received',
                     title='Nouvel avis reçu',
-                    message=f'Vous avez reçu un nouvel avis de {appointment.client.name}',
+                    message=f'Vous avez reçu un avis de {appointment.client.name}',
                     appointment=appointment
                 )
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Appointment.DoesNotExist:
             return Response({"error": "Rendez-vous non trouvé"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class ProcessPayment(APIView):
     permission_classes = [IsAuthenticated]
@@ -305,15 +310,15 @@ class ProcessPayment(APIView):
                     user=appointment.employer.user,
                     notification_type='payment_received',
                     title='Paiement reçu',
-                    message=f'Le paiement pour le rendez-vous avec {appointment.client.name} a été reçu',
+                    message=f'Paiement reçu pour le rendez-vous avec {appointment.client.name}',
                     appointment=appointment
                 )
                 return Response({"message": "Paiement traité avec succès"})
             else:
                 return Response({"message": "Paiement en espèces à effectuer sur place"})
-
         except Appointment.DoesNotExist:
             return Response({"error": "Rendez-vous non trouvé"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class UserProfile(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
@@ -321,6 +326,7 @@ class UserProfile(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
 
 class AppointmentPayment(APIView):
     permission_classes = [IsAuthenticated]
@@ -330,18 +336,12 @@ class AppointmentPayment(APIView):
             appointment = Appointment.objects.get(pk=pk)
 
             if request.user != appointment.client.user:
-                return Response(
-                    {"error": "Vous n'êtes pas autorisé à effectuer ce paiement"},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+                return Response({"error": "Non autorisé à effectuer ce paiement"}, status=status.HTTP_403_FORBIDDEN)
 
             payment_method = request.data.get('payment_method')
 
             if payment_method not in dict(Appointment.PAYMENT_CHOICES):
-                return Response(
-                    {"error": "Mode de paiement invalide"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Mode de paiement invalide"}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment.payment_method = payment_method
             appointment.is_paid = True
@@ -351,7 +351,7 @@ class AppointmentPayment(APIView):
                 user=appointment.employer.user,
                 notification_type='payment_received',
                 title='Paiement reçu',
-                message=f'Le paiement pour le rendez-vous avec {appointment.client.name} a été reçu',
+                message=f'Paiement reçu pour le rendez-vous avec {appointment.client.name}',
                 appointment=appointment
             )
 
@@ -359,14 +359,7 @@ class AppointmentPayment(APIView):
                 "message": "Paiement enregistré avec succès",
                 "appointment": AppointmentSerializer(appointment).data
             })
-
         except Appointment.DoesNotExist:
-            return Response(
-                {"error": "Rendez-vous non trouvé"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Rendez-vous non trouvé"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -10,9 +10,11 @@ import {
   faCalendarAlt,
   faBell,
   faSignOutAlt,
-  faCog
+  faCog,
+  faMoon,
+  faSun
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
+import { authAPI, notificationAPI } from '@/services/api';
 
 interface User {
   id: number;
@@ -26,14 +28,15 @@ const NavbarComponent: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<number>(0);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-    const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token');
         if (token) {
-          const response = await api.get('/auth/user/');
-          setUser(response.data);
+          const response = await authAPI.getUser();
+          setUser(response);
         }
       } catch (err) {
         console.error('Erreur d\'authentification:', err);
@@ -48,10 +51,9 @@ const NavbarComponent: React.FC = () => {
   useEffect(() => {
     const fetchNotifications = async () => {
       if (!user) return;
-
       try {
-        const response = await api.get('/notifications/');
-        setNotifications(response.data.filter((n: any) => !n.is_read).length);
+        const response = await notificationAPI.getNotifications();
+        setNotifications(response.filter((n: any) => !n.is_read).length);
       } catch (err) {
         console.error('Erreur lors du chargement des notifications:', err);
       }
@@ -59,6 +61,26 @@ const NavbarComponent: React.FC = () => {
 
     fetchNotifications();
   }, [user]);
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem('theme');
+    if (savedMode === 'dark') {
+      setDarkMode(true);
+      document.body.classList.add('dark-mode');
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    if (newMode) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('theme', 'light');
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -73,33 +95,42 @@ const NavbarComponent: React.FC = () => {
   return (
     <Navbar bg="white" expand="lg" className="shadow-sm">
       <Container>
-        <Navbar.Brand as={Link} to="/" className="fw-bold text-primary">
+        <Navbar.Brand as={Link as any} to="/" className="fw-bold text-primary">
           Nazek
         </Navbar.Brand>
 
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="me-auto">
-            <Nav.Link as={Link} to="/" className="d-flex align-items-center">
+            <Nav.Link as={Link as any} to="/" className="d-flex align-items-center">
               <FontAwesomeIcon icon={faHome} className="me-2" />
               Accueil
             </Nav.Link>
-            <Nav.Link as={Link} to="/services" className="d-flex align-items-center">
+            <Nav.Link as={Link as any} to="/services" className="d-flex align-items-center">
               <FontAwesomeIcon icon={faSearch} className="me-2" />
               Services
             </Nav.Link>
             {user && (
-              <Nav.Link as={Link} to="/appointments" className="d-flex align-items-center">
+              <Nav.Link as={Link as any} to="/appointments" className="d-flex align-items-center">
                 <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
                 Rendez-vous
               </Nav.Link>
             )}
           </Nav>
 
-          <Nav>
+          <Nav className="align-items-center">
+            <Button
+              variant="outline-secondary"
+              className="me-3"
+              onClick={toggleDarkMode}
+            >
+              <FontAwesomeIcon icon={darkMode ? faSun : faMoon} className="me-2" />
+              {darkMode ? 'Clair' : 'Sombre'}
+            </Button>
+
             {user ? (
               <>
-                <Nav.Link as={Link} to="/notifications" className="position-relative">
+                <Nav.Link as={Link as any} to="/notifications" className="position-relative">
                   <FontAwesomeIcon icon={faBell} className="me-2" />
                   Notifications
                   {notifications > 0 && (
@@ -128,11 +159,11 @@ const NavbarComponent: React.FC = () => {
                   </Dropdown.Toggle>
 
                   <Dropdown.Menu>
-                    <Dropdown.Item as={Link} to={`/profile/${user.role}`}>
+                    <Dropdown.Item as={Link as any} to={`/profile/${user.role}`}>
                       <FontAwesomeIcon icon={faUser} className="me-2" />
                       Mon profil
                     </Dropdown.Item>
-                    <Dropdown.Item as={Link} to="/settings">
+                    <Dropdown.Item as={Link as any} to="/settings">
                       <FontAwesomeIcon icon={faCog} className="me-2" />
                       Paramètres
                     </Dropdown.Item>
@@ -148,7 +179,7 @@ const NavbarComponent: React.FC = () => {
               <>
                 <Button
                   variant="outline-primary"
-                  as={Link}
+                  as={Link as any}
                   to="/login"
                   className="me-2"
                 >
@@ -156,7 +187,7 @@ const NavbarComponent: React.FC = () => {
                 </Button>
                 <Button
                   variant="primary"
-                  as={Link}
+                  as={Link as any}
                   to="/register"
                 >
                   Inscription

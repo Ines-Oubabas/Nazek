@@ -11,8 +11,8 @@ import {
   faSave,
   faArrowLeft
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
-import { User } from '../types';
+import { userAPI } from '@/services/api';
+import { User } from '@/types';
 
 const EditProfile: React.FC = () => {
   const navigate = useNavigate();
@@ -27,9 +27,9 @@ const EditProfile: React.FC = () => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await api.get('/users/me/');
-        setUser(response.data);
-        setPreviewUrl(response.data.profile_picture);
+        const response = await userAPI.getProfile();
+        setUser(response);
+        setPreviewUrl(response.profile_picture);
       } catch (err: any) {
         setError(err.response?.data?.error || 'Erreur lors du chargement du profil');
       } finally {
@@ -68,11 +68,7 @@ const EditProfile: React.FC = () => {
         formData.append('profile_picture', profilePicture);
       }
 
-      await api.patch('/users/me/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      await userAPI.updateProfile(formData);
 
       setSuccessMessage('Profil mis à jour avec succès');
       setTimeout(() => navigate('/profile'), 2000);
@@ -242,4 +238,4 @@ const EditProfile: React.FC = () => {
   );
 };
 
-export default EditProfile; 
+export default EditProfile;

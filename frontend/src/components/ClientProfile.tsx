@@ -16,8 +16,8 @@ import {
   faCog,
   faSignOutAlt
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
-import { User, Appointment } from '../types';
+import { userAPI, appointmentAPI } from '@/services/api';
+import { User, Appointment } from '@/types';
 
 const ClientProfile: React.FC = () => {
   const navigate = useNavigate();
@@ -29,15 +29,15 @@ const ClientProfile: React.FC = () => {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const [userResponse, appointmentsResponse] = await Promise.all([
-          api.get('/users/me/'),
-          api.get('/appointments/client/')
+        const [userData, appointmentData] = await Promise.all([
+          userAPI.getProfile(),
+          appointmentAPI.getAll()
         ]);
 
-        setUser(userResponse.data);
-        setAppointments(appointmentsResponse.data);
+        setUser(userData);
+        setAppointments(appointmentData as Appointment[]);
       } catch (err: any) {
-        setError(err.response?.data?.error || 'Erreur lors du chargement des données');
+        setError('Erreur lors du chargement des données');
       } finally {
         setLoading(false);
       }
@@ -52,14 +52,14 @@ const ClientProfile: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants = {
+    const variants: Record<string, string> = {
       pending: 'warning',
       accepted: 'success',
       rejected: 'danger',
       completed: 'info',
       cancelled: 'secondary'
     };
-    return <Badge bg={variants[status as keyof typeof variants]}>{status}</Badge>;
+    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
   };
 
   if (loading) {
@@ -159,14 +159,16 @@ const ClientProfile: React.FC = () => {
                         <div>
                           <h5 className="mb-1">
                             <FontAwesomeIcon icon={faUserTie} className="me-2" />
-                            {appointment.employer}
+                            {appointment.employer.first_name} {appointment.employer.last_name}
                           </h5>
                           <div className="text-muted">
                             <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                            {new Date(appointment.date).toLocaleDateString('fr-FR')}
-                            {' - '}
+                            {new Date(appointment.date).toLocaleDateString('fr-FR')} -
                             <FontAwesomeIcon icon={faClock} className="me-2" />
-                            {new Date(appointment.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(appointment.date).toLocaleTimeString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </div>
                         </div>
                         <div>
@@ -218,4 +220,4 @@ const ClientProfile: React.FC = () => {
   );
 };
 
-export default ClientProfile; 
+export default ClientProfile;

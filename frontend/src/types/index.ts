@@ -1,8 +1,15 @@
+// Types simples pour éviter la répétition de littéraux
+export type UserRole = 'client' | 'employer';
+export type AppointmentStatus = 'en_attente' | 'accepté' | 'refusé' | 'en_cours' | 'terminé' | 'annulé';
+export type PaymentMethod = 'carte' | 'especes';
+export type NotificationType = 'new_appointment' | 'message' | 'reminder' | 'update';
+
+// Interfaces principales
 export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'client' | 'employer';
+  role: UserRole;
   profile_picture?: string;
 }
 
@@ -52,9 +59,9 @@ export interface Appointment {
   employer: Employer;
   service: Service;
   date: string;
-  status: 'en_attente' | 'accepté' | 'refusé' | 'en_cours' | 'terminé' | 'annulé';
+  status: AppointmentStatus;
   description: string;
-  payment_method: 'carte' | 'especes';
+  payment_method: PaymentMethod;
   total_amount: number;
   is_paid: boolean;
   feedback?: string;
@@ -66,7 +73,7 @@ export interface Appointment {
 export interface Notification {
   id: number;
   recipient: number;
-  notification_type: string;
+  notification_type: NotificationType;
   title: string;
   message: string;
   is_read: boolean;
@@ -80,4 +87,4 @@ export interface Review {
   rating: number;
   comment: string;
   created_at: string;
-} 
+}

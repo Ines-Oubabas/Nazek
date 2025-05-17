@@ -2,18 +2,15 @@ from rest_framework import serializers
 from .models import Appointment, Client, Employer, Service, Availability, Notification, User
 from django.utils import timezone
 
-
 class ServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Service
         fields = "__all__"
 
-
 class AvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Availability
         fields = "__all__"
-
 
 class ClientSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -21,7 +18,6 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = "__all__"
-
 
 class EmployerSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -34,18 +30,15 @@ class EmployerSerializer(serializers.ModelSerializer):
         model = Employer
         fields = "__all__"
 
-
 class EmployerUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employer
-        fields = ["name", "email", "phone", "service"]
-
+        fields = ["name", "email", "phone", "service", "description", "hourly_rate"]
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = "__all__"
-
 
 class AppointmentSerializer(serializers.ModelSerializer):
     client = ClientSerializer(read_only=True)
@@ -64,19 +57,18 @@ class AppointmentSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        employer = self.initial_data.get('employer')
-        date = self.initial_data.get('date')
+        employer_id = self.initial_data.get('employer')
+        date_str = self.initial_data.get('date')
 
-        if employer and date:
+        if employer_id and date_str:
             try:
-                employer_instance = Employer.objects.get(id=employer)
-                parsed_date = timezone.datetime.fromisoformat(date.replace("Z", "+00:00"))
+                employer_instance = Employer.objects.get(id=employer_id)
+                parsed_date = timezone.datetime.fromisoformat(date_str.replace("Z", "+00:00"))
                 if not employer_instance.is_available(parsed_date):
                     raise serializers.ValidationError("L'employeur n'est pas disponible à cette date.")
             except Employer.DoesNotExist:
                 raise serializers.ValidationError("L'employeur spécifié n'existe pas.")
         return data
-
 
 class AppointmentReviewSerializer(serializers.ModelSerializer):
     class Meta:
@@ -98,7 +90,6 @@ class AppointmentReviewSerializer(serializers.ModelSerializer):
             instance.employer.update_rating(instance.rating)
 
         return instance
-
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:

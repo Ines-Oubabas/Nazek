@@ -1,4 +1,3 @@
-// frontend/src/pages/Login.jsx
 import React, { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
@@ -11,7 +10,7 @@ import {
   Alert,
   Paper,
 } from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -35,8 +34,7 @@ const Login = () => {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      console.error(err);
-      const message = err.response?.data?.error || "Échec de la connexion. Veuillez vérifier vos identifiants.";
+      const message = err.message || "Échec de la connexion. Vérifiez vos identifiants.";
       setError(message);
     } finally {
       setLoading(false);
@@ -44,66 +42,59 @@ const Login = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, mb: 4 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h4" component="h1" align="center" gutterBottom>
-            Connexion
+    <Container maxWidth="sm" className="mt-10 mb-6">
+      <Paper elevation={4} className="p-8 rounded-xl shadow-lg bg-white">
+        <Typography variant="h4" align="center" className="mb-4 font-bold text-primary">
+          Connexion
+        </Typography>
+
+        {error && (
+          <Alert severity="error" className="mb-4">
+            {error}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label="Adresse email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Mot de passe"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            margin="normal"
+            required
+          />
+
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            color="primary"
+            disabled={loading}
+            className="mt-4"
+          >
+            {loading ? 'Connexion en cours...' : 'Se connecter'}
+          </Button>
+        </form>
+
+        <Box className="text-center mt-6">
+          <Typography variant="body2">
+            Vous n'avez pas de compte ?{' '}
+            <Link component={RouterLink} to="/register" underline="hover">
+              Inscrivez-vous
+            </Link>
           </Typography>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          <Box component="form" onSubmit={handleSubmit}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="email"
-              label="Adresse email"
-              name="email"
-              autoComplete="email"
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Mot de passe"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
-            >
-              {loading ? 'Connexion en cours...' : 'Se connecter'}
-            </Button>
-          </Box>
-
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body2">
-              Vous n'avez pas de compte ?{' '}
-              <Link component={RouterLink} to="/register">
-                Inscrivez-vous
-              </Link>
-            </Typography>
-          </Box>
-        </Paper>
-      </Box>
+        </Box>
+      </Paper>
     </Container>
   );
 };

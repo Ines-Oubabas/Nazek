@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import api from '../api';
+import { authAPI } from '@/services/api'; // Correction ici !
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -8,12 +8,12 @@ interface PrivateRouteProps {
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const checkAuth = async () => {
       try {
-        await api.get('/users/me/');
+        await authAPI.getUser(); // Correction ici !
         setIsAuthenticated(true);
       } catch (err) {
         setIsAuthenticated(false);
@@ -34,4 +34,4 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   return <>{children}</>;
 };
 
-export default PrivateRoute; 
+export default PrivateRoute;

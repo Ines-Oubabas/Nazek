@@ -5,7 +5,6 @@ import {
   Box,
   Typography,
   CircularProgress,
-  Alert,
 } from '@mui/material';
 import { LocationOn as LocationIcon } from '@mui/icons-material';
 import api from '../../services/api';
@@ -14,7 +13,7 @@ const LocationSelector = ({ value, onChange, error, helperText }) => {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [inputValue, setInputValue] = useState(value || '');
+  const [inputValue, setInputValue] = useState(value?.address || '');
 
   useEffect(() => {
     if (inputValue.length >= 3) {
@@ -36,25 +35,20 @@ const LocationSelector = ({ value, onChange, error, helperText }) => {
     }
   };
 
-  const handleInputChange = (event, newInputValue) => {
-    setInputValue(newInputValue);
-  };
-
-  const handleChange = (event, newValue) => {
-    onChange(newValue);
-  };
-
   return (
     <Autocomplete
       open={open}
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
       value={value}
-      onChange={handleChange}
-      onInputChange={handleInputChange}
+      onChange={(event, newValue) => onChange(newValue)}
+      onInputChange={(event, newInputValue) => setInputValue(newInputValue)}
       options={options}
       loading={loading}
       getOptionLabel={(option) => option.address || ''}
+      isOptionEqualToValue={(option, value) => option.id === value.id}
+      noOptionsText="Aucune localisation trouvée"
+      loadingText="Chargement..."
       renderInput={(params) => (
         <TextField
           {...params}
@@ -64,15 +58,14 @@ const LocationSelector = ({ value, onChange, error, helperText }) => {
           InputProps={{
             ...params.InputProps,
             startAdornment: (
-              <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
-                <LocationIcon color="action" />
-              </Box>
+              <React.Fragment>
+                <LocationIcon sx={{ mr: 1, color: 'action.active' }} />
+                {params.InputProps.startAdornment}
+              </React.Fragment>
             ),
             endAdornment: (
               <React.Fragment>
-                {loading ? (
-                  <CircularProgress color="inherit" size={20} />
-                ) : null}
+                {loading && <CircularProgress color="inherit" size={20} />}
                 {params.InputProps.endAdornment}
               </React.Fragment>
             ),
@@ -81,8 +74,8 @@ const LocationSelector = ({ value, onChange, error, helperText }) => {
       )}
       renderOption={(props, option) => (
         <Box component="li" {...props}>
-          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-            <LocationIcon sx={{ mr: 1, color: 'action' }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <LocationIcon sx={{ color: 'primary.main' }} />
             <Box>
               <Typography variant="body1">{option.address}</Typography>
               {option.city && (
@@ -94,11 +87,8 @@ const LocationSelector = ({ value, onChange, error, helperText }) => {
           </Box>
         </Box>
       )}
-      noOptionsText="Aucune localisation trouvée"
-      loadingText="Chargement..."
-      isOptionEqualToValue={(option, value) => option.id === value.id}
     />
   );
 };
 
-export default LocationSelector; 
+export default LocationSelector;

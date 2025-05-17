@@ -7,8 +7,8 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
-import ServiceCard from '../components/common/ServiceCard';
-import { useAuth } from '../contexts/AuthContext';
+import ServiceCard from '@/components/common/ServiceCard';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Favorites = () => {
   const { user } = useAuth();
@@ -17,8 +17,31 @@ const Favorites = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // TODO: Implémenter la récupération des favoris
-    setLoading(false);
+    const fetchFavorites = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // 🛠️ Simulation temporaire (remplacer par une vraie requête API plus tard)
+        const dummy = [
+          {
+            id: 1,
+            name: 'Nettoyage à domicile',
+            description: 'Un nettoyage complet de votre logement',
+            image: '/images/cleaning.jpg',
+            price: 2000,
+            rating: 4.7,
+          },
+        ];
+        setFavorites(dummy);
+      } catch (err) {
+        setError("Erreur lors du chargement des favoris.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFavorites();
   }, []);
 
   if (loading) {
@@ -42,9 +65,10 @@ const Favorites = () => {
       <Typography variant="h4" gutterBottom>
         Mes Services Favoris
       </Typography>
+
       {favorites.length === 0 ? (
         <Alert severity="info">
-          Vous n'avez pas encore de services favoris
+          Vous n’avez pas encore enregistré de services en favoris.
         </Alert>
       ) : (
         <Grid container spacing={3}>
@@ -54,7 +78,7 @@ const Favorites = () => {
                 service={service}
                 isFavorite={true}
                 onFavoriteClick={() => {
-                  // TODO: Implémenter la suppression des favoris
+                  setFavorites((prev) => prev.filter((s) => s.id !== service.id));
                 }}
               />
             </Grid>
@@ -65,4 +89,4 @@ const Favorites = () => {
   );
 };
 
-export default Favorites; 
+export default Favorites;

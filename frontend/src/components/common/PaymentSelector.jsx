@@ -12,9 +12,8 @@ import {
   DialogActions,
   TextField,
   Grid,
-  Chip,
-  Alert,
   Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   CreditCard as CreditCardIcon,
@@ -22,7 +21,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
 } from '@mui/icons-material';
-import api from '../../services/api';
+import api from '@/services/api';
 
 const PaymentSelector = ({ value, onChange, error, helperText }) => {
   const [cards, setCards] = useState([]);
@@ -36,11 +35,7 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
     cvv: '',
     cardholderName: '',
   });
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     fetchCards();
@@ -50,9 +45,9 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
     try {
       const response = await api.get('/api/v1/payment-methods/');
       setCards(response.data);
-      setLoading(false);
     } catch (error) {
       console.error('Erreur lors du chargement des cartes:', error);
+    } finally {
       setLoading(false);
     }
   };
@@ -60,12 +55,7 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
   const handleAddCard = () => {
     setEditMode(false);
     setSelectedCard(null);
-    setFormData({
-      cardNumber: '',
-      expiryDate: '',
-      cvv: '',
-      cardholderName: '',
-    });
+    setFormData({ cardNumber: '', expiryDate: '', cvv: '', cardholderName: '' });
     setDialogOpen(true);
   };
 
@@ -73,7 +63,7 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
     setEditMode(true);
     setSelectedCard(card);
     setFormData({
-      cardNumber: card.last4,
+      cardNumber: '', // Pas de numéro complet pour des raisons de sécurité
       expiryDate: card.expiryDate,
       cvv: '',
       cardholderName: card.cardholderName,
@@ -84,18 +74,10 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
   const handleDeleteCard = async (cardId) => {
     try {
       await api.delete(`/api/v1/payment-methods/${cardId}/`);
-      setSnackbar({
-        open: true,
-        message: 'Carte supprimée avec succès',
-        severity: 'success',
-      });
+      setSnackbar({ open: true, message: 'Carte supprimée avec succès', severity: 'success' });
       fetchCards();
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de la suppression de la carte',
-        severity: 'error',
-      });
+      setSnackbar({ open: true, message: 'Erreur lors de la suppression de la carte', severity: 'error' });
     }
   };
 
@@ -103,51 +85,28 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
     try {
       if (editMode) {
         await api.patch(`/api/v1/payment-methods/${selectedCard.id}/`, formData);
-        setSnackbar({
-          open: true,
-          message: 'Carte mise à jour avec succès',
-          severity: 'success',
-        });
+        setSnackbar({ open: true, message: 'Carte mise à jour avec succès', severity: 'success' });
       } else {
         const response = await api.post('/api/v1/payment-methods/', formData);
-        setSnackbar({
-          open: true,
-          message: 'Carte ajoutée avec succès',
-          severity: 'success',
-        });
+        setSnackbar({ open: true, message: 'Carte ajoutée avec succès', severity: 'success' });
         onChange(response.data);
       }
       setDialogOpen(false);
       fetchCards();
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de l\'enregistrement de la carte',
-        severity: 'error',
-      });
+      setSnackbar({ open: true, message: "Erreur lors de l'enregistrement de la carte", severity: 'error' });
     }
   };
 
   const handleClose = () => {
     setDialogOpen(false);
-    setFormData({
-      cardNumber: '',
-      expiryDate: '',
-      cvv: '',
-      cardholderName: '',
-    });
-  };
-
-  const formatCardNumber = (number) => {
-    return number.replace(/(\d{4})/g, '$1 ').trim();
+    setFormData({ cardNumber: '', expiryDate: '', cvv: '', cardholderName: '' });
   };
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>
-        Moyens de paiement
-      </Typography>
-      
+      <Typography variant="h6" gutterBottom>Moyens de paiement</Typography>
+
       <Grid container spacing={2}>
         {cards.map((card) => (
           <Grid item xs={12} sm={6} md={4} key={card.id}>
@@ -163,27 +122,13 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <CreditCardIcon sx={{ mr: 1 }} />
-                    <Typography variant="subtitle1">
-                      •••• {card.last4}
-                    </Typography>
+                    <Typography variant="subtitle1">•••• {card.last4}</Typography>
                   </Box>
                   <Box>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditCard(card);
-                      }}
-                    >
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleEditCard(card); }}>
                       <EditIcon />
                     </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCard(card.id);
-                      }}
-                    >
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDeleteCard(card.id); }}>
                       <DeleteIcon />
                     </IconButton>
                   </Box>
@@ -200,18 +145,12 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
         ))}
       </Grid>
 
-      <Button
-        startIcon={<AddIcon />}
-        onClick={handleAddCard}
-        sx={{ mt: 2 }}
-      >
+      <Button startIcon={<AddIcon />} onClick={handleAddCard} sx={{ mt: 2 }}>
         Ajouter une carte
       </Button>
 
       <Dialog open={dialogOpen} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editMode ? 'Modifier la carte' : 'Ajouter une carte'}
-        </DialogTitle>
+        <DialogTitle>{editMode ? 'Modifier la carte' : 'Ajouter une carte'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
             <TextField
@@ -220,6 +159,7 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
               onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
               fullWidth
               placeholder="1234 5678 9012 3456"
+              disabled={editMode}
             />
             <Grid container spacing={2}>
               <Grid item xs={6}>
@@ -279,4 +219,4 @@ const PaymentSelector = ({ value, onChange, error, helperText }) => {
   );
 };
 
-export default PaymentSelector; 
+export default PaymentSelector;

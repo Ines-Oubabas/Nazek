@@ -10,7 +10,7 @@ import {
   faUserTie,
   faHandshake
 } from '@fortawesome/free-solid-svg-icons';
-import api from '../api';
+import { getServices, employerAPI } from '@/services/api'; // ✅ Correction ici
 
 interface Service {
   id: number;
@@ -44,8 +44,8 @@ const ServiceList: React.FC = () => {
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const response = await api.get('/services/');
-        setServices(response.data);
+        const data = await getServices(); // ✅
+        setServices(data);
       } catch (err) {
         setError('Erreur lors du chargement des services');
         console.error(err);
@@ -63,8 +63,8 @@ const ServiceList: React.FC = () => {
 
       try {
         setLoading(true);
-        const response = await api.get(`/employers/?service=${selectedService}`);
-        setEmployers(response.data);
+        const data = await employerAPI.getAll(selectedService); // ✅
+        setEmployers(data);
       } catch (err) {
         setError('Erreur lors du chargement des prestataires');
         console.error(err);
@@ -179,4 +179,4 @@ const ServiceList: React.FC = () => {
   );
 };
 
-export default ServiceList; 
+export default ServiceList;

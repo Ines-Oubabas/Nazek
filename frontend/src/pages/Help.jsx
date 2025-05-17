@@ -7,6 +7,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   Paper,
+  Divider,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
@@ -14,40 +15,47 @@ const Help = () => {
   const faqs = [
     {
       question: 'Comment réserver un service ?',
-      answer: 'Pour réserver un service, naviguez vers la page de recherche, sélectionnez le service souhaité, choisissez une date et une heure disponibles, puis suivez les étapes de réservation.',
+      answer:
+        'Pour réserver un service, allez dans la page de recherche, sélectionnez un service, une date et suivez les étapes de réservation.',
     },
     {
       question: 'Comment annuler un rendez-vous ?',
-      answer: 'Vous pouvez annuler un rendez-vous depuis la page "Mes rendez-vous". Cliquez sur le rendez-vous concerné et utilisez le bouton "Annuler".',
+      answer:
+        'Rendez-vous dans la page "Mes rendez-vous", cliquez sur le rendez-vous concerné et utilisez le bouton "Annuler".',
     },
     {
       question: 'Comment modifier mes informations personnelles ?',
-      answer: 'Accédez à votre profil via le menu utilisateur, puis cliquez sur "Modifier le profil". Vous pourrez alors mettre à jour vos informations.',
+      answer:
+        'Accédez à votre profil, cliquez sur "Modifier le profil" et mettez à jour vos informations.',
     },
     {
       question: 'Comment contacter le support ?',
-      answer: 'Vous pouvez nous contacter via le formulaire de contact ou par email à support@example.com.',
+      answer:
+        'Via le formulaire de contact ou par email à support@example.com.',
     },
   ];
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="md" sx={{ py: 5 }}>
       <Paper elevation={3} sx={{ p: 4 }}>
         <Typography variant="h4" gutterBottom>
-          Centre d'aide
+          Centre d’aide
         </Typography>
+        <Divider sx={{ mb: 2 }} />
         <Typography variant="body1" paragraph>
-          Trouvez rapidement les réponses à vos questions fréquentes.
+          Vous trouverez ici les réponses aux questions les plus fréquentes.
         </Typography>
 
         <Box sx={{ mt: 4 }}>
           {faqs.map((faq, index) => (
-            <Accordion key={index}>
+            <Accordion key={index} sx={{ mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="h6">{faq.question}</Typography>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                  {faq.question}
+                </Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Typography>{faq.answer}</Typography>
+                <Typography color="text.secondary">{faq.answer}</Typography>
               </AccordionDetails>
             </Accordion>
           ))}
@@ -57,4 +65,4 @@ const Help = () => {
   );
 };
 
-export default Help; 
+export default Help;

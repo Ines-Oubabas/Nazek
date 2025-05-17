@@ -44,110 +44,91 @@ const Navbar = () => {
     { text: 'Profil', icon: <PersonIcon />, path: '/profile' },
   ];
 
-  const drawer = (
-    <Box>
-      <Toolbar>
-        <Typography variant="h6" noWrap>
-          Menu
-        </Typography>
-      </Toolbar>
-      <List>
-        {menuItems.map((item) => (
-          <ListItem
-            button
-            key={item.text}
-            onClick={() => {
-              navigate(item.path);
-              if (isMobile) handleDrawerToggle();
-            }}
-          >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
-          </ListItem>
-        ))}
-        {user && (
-          <ListItem button onClick={handleLogout}>
-            <ListItemIcon>
-              <LogoutIcon />
-            </ListItemIcon>
-            <ListItemText primary="Déconnexion" />
-          </ListItem>
-        )}
-      </List>
-    </Box>
+  const renderDrawerItems = () => (
+    <List>
+      {menuItems.map((item) => (
+        <ListItem
+          button
+          key={item.text}
+          onClick={() => {
+            navigate(item.path);
+            if (isMobile) handleDrawerToggle();
+          }}
+        >
+          <ListItemIcon>{item.icon}</ListItemIcon>
+          <ListItemText primary={item.text} />
+        </ListItem>
+      ))}
+      {user && (
+        <ListItem button onClick={handleLogout}>
+          <ListItemIcon>
+            <LogoutIcon />
+          </ListItemIcon>
+          <ListItemText primary="Déconnexion" />
+        </ListItem>
+      )}
+    </List>
   );
 
   return (
-    <AppBar position="static">
-      <Toolbar>
-        <IconButton
-          color="inherit"
-          edge="start"
-          onClick={handleDrawerToggle}
-          sx={{ mr: 2, display: { sm: 'none' } }}
-        >
-          <MenuIcon />
-        </IconButton>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Gestion des Rendez-vous
-        </Typography>
-        {!isMobile && (
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            {menuItems.map((item) => (
-              <Button
-                key={item.text}
-                color="inherit"
-                startIcon={item.icon}
-                onClick={() => navigate(item.path)}
-              >
-                {item.text}
-              </Button>
-            ))}
-            {user && (
-              <Button
-                color="inherit"
-                startIcon={<LogoutIcon />}
-                onClick={handleLogout}
-              >
-                Déconnexion
-              </Button>
-            )}
-          </Box>
-        )}
-      </Toolbar>
+    <>
+      <AppBar position="static" color="primary">
+        <Toolbar>
+          {isMobile && (
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            Nazek
+          </Typography>
+          {!isMobile && (
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {menuItems.map((item) => (
+                <Button
+                  key={item.text}
+                  color="inherit"
+                  startIcon={item.icon}
+                  onClick={() => navigate(item.path)}
+                >
+                  {item.text}
+                </Button>
+              ))}
+              {user && (
+                <Button
+                  color="inherit"
+                  startIcon={<LogoutIcon />}
+                  onClick={handleLogout}
+                >
+                  Déconnexion
+                </Button>
+              )}
+            </Box>
+          )}
+        </Toolbar>
+      </AppBar>
+
+      {/* Drawer pour mobile uniquement */}
       <Drawer
         variant="temporary"
         anchor="left"
         open={mobileOpen}
         onClose={handleDrawerToggle}
-        ModalProps={{
-          keepMounted: true,
-        }}
+        ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: 'block', sm: 'none' },
-          '& .MuiDrawer-paper': {
-            boxSizing: 'border-box',
-            width: 240,
-          },
+          '& .MuiDrawer-paper': { width: 240 },
         }}
       >
-        {drawer}
+        <Box sx={{ width: 240, mt: 2 }}>{renderDrawerItems()}</Box>
       </Drawer>
-      <Drawer
-        variant="permanent"
-        sx={{
-          display: { xs: 'none', sm: 'block' },
-          '& .MuiDrawer-paper': {
-            boxSizing: 'border-box',
-            width: 240,
-          },
-        }}
-        open
-      >
-        {drawer}
-      </Drawer>
-    </AppBar>
+    </>
   );
 };
 
-export default Navbar; 
+export default Navbar;

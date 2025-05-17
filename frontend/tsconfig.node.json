@@ -6,8 +6,11 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Bundler mode */
-    "moduleResolution": "bundler",
+    /* Résolution correcte */
+    "moduleResolution": "node",  // ⬅️ Corrigé pour supporter 'path' et '__dirname'
+    "types": ["node"],           // ⬅️ Ajouté pour résoudre les types comme 'path', '__dirname', etc.
+
+    /* Mode strict + support bundler */
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",

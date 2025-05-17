@@ -1,0 +1,84 @@
+/* Mode sombre général */
+body.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Navbar sombre */
+body.dark-mode .navbar {
+  background-color: #1f1f1f !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+body.dark-mode .navbar-brand,
+body.dark-mode .nav-link {
+  color: #ffffff !important;
+}
+
+body.dark-mode .nav-link:hover {
+  color: #ffc107 !important;
+}
+
+/* Cartes */
+body.dark-mode .card {
+  background-color: #1f1f1f;
+  border: none;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.05);
+}
+
+/* Inputs, Sélections et Textareas */
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+  background-color: #2c2c2c;
+  color: #ffffff;
+  border: 1px solid #444;
+}
+
+body.dark-mode .form-control::placeholder {
+  color: #bbb;
+}
+
+/* Boutons */
+body.dark-mode .btn-primary {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+body.dark-mode .btn-primary:hover {
+  background-color: #0b5ed7;
+}
+
+body.dark-mode .btn-outline-primary {
+  color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+body.dark-mode .btn-outline-primary:hover {
+  background-color: #0d6efd;
+  color: white;
+}
+
+/* Footer */
+body.dark-mode footer {
+  background-color: #1a1a1a;
+  color: #ccc;
+}
+
+/* Alerts */
+body.dark-mode .alert {
+  background-color: #2b2b2b;
+  color: #f8f9fa;
+}
+
+/* Tables */
+body.dark-mode .table {
+  background-color: #1f1f1f;
+  color: #e0e0e0;
+}
+
+/* Badges */
+body.dark-mode .badge {
+  background-color: #0d6efd;
+  color: #fff;
+}

@@ -1,9 +1,10 @@
+# appointments/models.py
+
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-
 
 class Service(models.Model):
     name = models.CharField(max_length=100, verbose_name="Nom du service")
@@ -18,17 +19,11 @@ class Service(models.Model):
         verbose_name = "Service"
         verbose_name_plural = "Services"
 
-
 class Availability(models.Model):
     employer = models.ForeignKey('Employer', on_delete=models.CASCADE, related_name='availabilities')
     day_of_week = models.IntegerField(choices=[
-        (0, 'Lundi'),
-        (1, 'Mardi'),
-        (2, 'Mercredi'),
-        (3, 'Jeudi'),
-        (4, 'Vendredi'),
-        (5, 'Samedi'),
-        (6, 'Dimanche')
+        (0, 'Lundi'), (1, 'Mardi'), (2, 'Mercredi'), (3, 'Jeudi'),
+        (4, 'Vendredi'), (5, 'Samedi'), (6, 'Dimanche'),
     ])
     start_time = models.TimeField()
     end_time = models.TimeField()
@@ -39,32 +34,20 @@ class Availability(models.Model):
         verbose_name_plural = "Disponibilités"
         unique_together = ['employer', 'day_of_week', 'start_time', 'end_time']
 
-
 class Employer(models.Model):
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='employer'
-    )
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='employer')
     name = models.CharField(max_length=255, verbose_name="Nom de l'employeur")
     email = models.EmailField(unique=True, verbose_name="Email de l'employeur")
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Numéro de téléphone")
-    service = models.ForeignKey(
-        Service,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="employers",
-        verbose_name="Service associé",
-    )
+    service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True, blank=True, related_name="employers")
     is_active = models.BooleanField(default=True, verbose_name="Employeur actif")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date d'inscription")
+    created_at = models.DateTimeField(auto_now_add=True)
     profile_picture = models.ImageField(upload_to='employer_pics/', null=True, blank=True)
-    description = models.TextField(blank=True, null=True, verbose_name="Description")
+    description = models.TextField(blank=True, null=True)
     average_rating = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(5.0)])
     total_reviews = models.IntegerField(default=0)
-    is_verified = models.BooleanField(default=False, verbose_name="Employeur vérifié")
-    hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Tarif horaire")
+    is_verified = models.BooleanField(default=False)
+    hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -81,19 +64,14 @@ class Employer(models.Model):
         verbose_name = "Employeur"
         verbose_name_plural = "Employeurs"
 
-
 class Client(models.Model):
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='client'
-    )
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='client')
     name = models.CharField(max_length=100, verbose_name="Nom du client")
     email = models.EmailField(unique=True, verbose_name="Email du client")
     phone = models.CharField(max_length=15, verbose_name="Numéro de téléphone")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date d'inscription")
+    created_at = models.DateTimeField(auto_now_add=True)
     profile_picture = models.ImageField(upload_to='client_pics/', null=True, blank=True)
-    address = models.TextField(blank=True, null=True, verbose_name="Adresse")
+    address = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -102,32 +80,20 @@ class Client(models.Model):
         verbose_name = "Client"
         verbose_name_plural = "Clients"
 
-
 class Notification(models.Model):
-    recipient = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='notifications'
-    )
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     notification_type = models.CharField(max_length=50)
     title = models.CharField(max_length=200)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    appointment = models.ForeignKey(
-        'Appointment',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='notifications'
-    )
-
-    class Meta:
-        ordering = ['-created_at']
+    appointment = models.ForeignKey('Appointment', on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
 
     def __str__(self):
         return f"{self.title} - {self.recipient.username}"
 
+    class Meta:
+        ordering = ['-created_at']
 
 class Appointment(models.Model):
     STATUS_CHOICES = [
@@ -144,54 +110,20 @@ class Appointment(models.Model):
         ("especes", "Espèces"),
     ]
 
-    client = models.ForeignKey(
-        Client,
-        on_delete=models.CASCADE,
-        related_name="client_appointments",
-        verbose_name="Client",
-    )
-    employer = models.ForeignKey(
-        Employer,
-        on_delete=models.CASCADE,
-        related_name="employer_appointments",
-        verbose_name="Employeur",
-    )
-    service = models.ForeignKey(
-        Service,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="service_appointments",
-        verbose_name="Service",
-    )
-    date = models.DateTimeField(verbose_name="Date du rendez-vous")
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="en_attente",
-        verbose_name="Statut",
-    )
-    description = models.TextField(blank=True, null=True, verbose_name="Description")
-    payment_method = models.CharField(
-        max_length=20,
-        choices=PAYMENT_CHOICES,
-        default="especes",
-        verbose_name="Mode de paiement",
-    )
-    total_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0.00, verbose_name="Montant total"
-    )
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="client_appointments")
+    employer = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="employer_appointments")
+    service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True, blank=True, related_name="service_appointments")
+    date = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="en_attente")
+    description = models.TextField(blank=True, null=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default="especes")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     is_paid = models.BooleanField(default=False)
-    feedback = models.TextField(blank=True, null=True, verbose_name="Feedback")
-    rating = models.IntegerField(
-        choices=[(i, i) for i in range(1, 6)],
-        blank=True,
-        null=True,
-        verbose_name="Évaluation",
-    )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    feedback = models.TextField(blank=True, null=True)
+    rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)], blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     estimated_duration = models.IntegerField(help_text="Durée estimée en minutes", null=True, blank=True)
-    location = models.TextField(blank=True, null=True, help_text="Adresse du rendez-vous")
+    location = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.client.name} - {self.employer.name} - {self.date}"
@@ -209,7 +141,6 @@ class Appointment(models.Model):
         verbose_name = "Rendez-vous"
         verbose_name_plural = "Rendez-vous"
 
-
 class User(AbstractUser):
     ROLE_CHOICES = (
         ('client', 'Client'),
@@ -221,9 +152,9 @@ class User(AbstractUser):
     address = models.TextField(blank=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
 
+    def __str__(self):
+        return self.username
+
     class Meta:
         verbose_name = 'Utilisateur'
         verbose_name_plural = 'Utilisateurs'
-
-    def __str__(self):
-        return self.username

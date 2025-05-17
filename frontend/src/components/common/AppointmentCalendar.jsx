@@ -9,14 +9,14 @@ import {
   useTheme,
   Fade,
 } from '@mui/material';
-import { format, addDays, isSameDay, parseISO } from 'date-fns';
+import { format, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const timeSlots = [
   '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00',
 ];
 
-const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
+const AppointmentCalendar = ({ onSelectDateTime }) => {
   const theme = useTheme();
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
@@ -30,11 +30,17 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
 
   const handleTimeSelect = (time) => {
     setSelectedTime(time);
-    if (selectedDate) {
-      const dateTime = new Date(selectedDate);
-      const [hours, minutes] = time.split(':');
-      dateTime.setHours(parseInt(hours), parseInt(minutes));
-      onSelectDateTime(dateTime);
+  };
+
+  const handleConfirm = () => {
+    if (selectedDate && selectedTime) {
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const finalDate = new Date(selectedDate);
+      finalDate.setHours(hours, minutes, 0, 0);
+      onSelectDateTime({
+        date: finalDate.toISOString().split('T')[0],
+        time: selectedTime,
+      });
     }
   };
 
@@ -67,7 +73,7 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         </Typography>
         <Grid container spacing={1} sx={{ mb: 3 }}>
           {availableDates.map((date) => (
-            <Grid item key={date.toISOString()}>
+            <Grid item key={date.toDateString()}>
               <Chip
                 label={format(date, 'EEE d MMM', { locale: fr })}
                 onClick={() => handleDateSelect(date)}
@@ -84,7 +90,7 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         </Grid>
 
         {selectedDate && (
-          <Fade in={true}>
+          <Fade in>
             <Box>
               <Typography variant="subtitle1" gutterBottom>
                 Créneaux horaires disponibles
@@ -111,14 +117,14 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         )}
 
         {selectedDate && selectedTime && (
-          <Fade in={true}>
+          <Fade in>
             <Box sx={{ mt: 3, textAlign: 'center' }}>
               <Typography variant="body1" gutterBottom>
-                Vous avez sélectionné le {format(selectedDate, 'EEEE d MMMM', { locale: fr })} à {selectedTime}
+                Sélectionné : {format(selectedDate, 'EEEE d MMMM', { locale: fr })} à {selectedTime}
               </Typography>
               <Button
                 variant="contained"
-                onClick={() => onSelectDateTime(new Date(selectedDate.setHours(...selectedTime.split(':'))))}
+                onClick={handleConfirm}
                 sx={{
                   background: 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)',
                   boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
@@ -138,4 +144,4 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
   );
 };
 
-export default AppointmentCalendar; 
+export default AppointmentCalendar;

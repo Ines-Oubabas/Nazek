@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -15,64 +15,55 @@ import {
   EmojiEvents as EmojiEventsIcon,
 } from '@mui/icons-material';
 
+// Format français des nombres
+const formatNumber = (num) => new Intl.NumberFormat('fr-FR').format(num);
+
 const StatCard = ({ icon, title, value, delay }) => {
   const [count, setCount] = useState(0);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
+    let start = null;
     const duration = 2000;
-    const steps = 60;
-    const increment = value / steps;
-    const stepDuration = duration / steps;
 
-    let current = 0;
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        setCount(value);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(current));
+    const step = (timestamp) => {
+      if (!start) start = timestamp;
+      const progress = timestamp - start;
+      const percent = Math.min(progress / duration, 1);
+      setCount(Math.floor(percent * value));
+      if (progress < duration) {
+        requestAnimationFrame(step);
       }
-    }, stepDuration);
+    };
 
-    return () => clearInterval(timer);
-  }, [value]);
+    const timeout = setTimeout(() => {
+      requestAnimationFrame(step);
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [value, delay]);
 
   return (
-    <Fade in={true} timeout={1000} style={{ transitionDelay: `${delay}ms` }}>
+    <Fade in timeout={1000} style={{ transitionDelay: `${delay}ms` }}>
       <Paper
         elevation={3}
         sx={{
           p: 3,
           textAlign: 'center',
           borderRadius: 2,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.8) 100%)',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.8))',
           backdropFilter: 'blur(10px)',
           transition: 'all 0.3s ease',
           '&:hover': {
-            transform: 'translateY(-8px)',
+            transform: 'translateY(-6px)',
             boxShadow: theme.shadows[8],
           },
         }}
       >
-        <Box
-          sx={{
-            color: 'primary.main',
-            mb: 2,
-            display: 'flex',
-            justifyContent: 'center',
-          }}
-        >
-          {icon}
-        </Box>
-        <Typography
-          variant={isMobile ? 'h4' : 'h3'}
-          component="div"
-          sx={{ fontWeight: 'bold', mb: 1 }}
-        >
-          {count}+
+        <Box sx={{ color: 'primary.main', mb: 2 }}>{icon}</Box>
+        <Typography variant={isMobile ? 'h4' : 'h3'} fontWeight="bold" mb={1}>
+          {formatNumber(count)}+
         </Typography>
         <Typography variant="h6" color="text.secondary">
           {title}
@@ -107,14 +98,14 @@ const AnimatedStats = () => {
   ];
 
   return (
-    <Grid container spacing={3}>
+    <Grid container spacing={3} sx={{ mt: 4 }}>
       {stats.map((stat, index) => (
         <Grid item xs={12} sm={6} md={3} key={index}>
-          <StatCard {...stat} delay={index * 200} />
+          <StatCard {...stat} delay={index * 250} />
         </Grid>
       ))}
     </Grid>
   );
 };
 
-export default AnimatedStats; 
+export default AnimatedStats;

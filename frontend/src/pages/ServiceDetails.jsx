@@ -2,32 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
-  Box,
+  Grid,
   Typography,
-  CircularProgress,
-  Alert,
+  Box,
+  Paper,
+  Button,
+  Rating,
+  Chip,
+  Avatar,
+  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
   TextField,
-  Paper,
-  Grid,
-  Rating,
-  Chip,
-  Divider,
+  MenuItem,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   LocationOn as LocationIcon,
-  AccessTime as TimeIcon,
   Euro as EuroIcon,
   Favorite as FavoriteIcon,
   FavoriteBorder as FavoriteBorderIcon,
+  CalendarToday as CalendarIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material';
-import AppointmentCalendar from '../components/common/AppointmentCalendar';
-import api from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { useAuth } from '@/contexts/AuthContext';
+import { appointmentAPI, serviceAPI } from '@/services/api';
+import ServiceCard from '@/components/common/ServiceCard';
 
 const ServiceDetails = () => {
   const { id } = useParams();
@@ -35,12 +40,15 @@ const ServiceDetails = () => {
   const { user } = useAuth();
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showBookingDialog, setShowBookingDialog] = useState(false);
-  const [bookingNotes, setBookingNotes] = useState('');
-  const [selectedDateTime, setSelectedDateTime] = useState(null);
+  const [error, setError] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [appointmentDialog, setAppointmentDialog] = useState(false);
+  const [appointmentData, setAppointmentData] = useState({
+    date: '',
+    time: '',
+    duration: 60,
+    notes: '',
+  });
 
   useEffect(() => {
     fetchServiceDetails();
@@ -49,218 +57,128 @@ const ServiceDetails = () => {
   const fetchServiceDetails = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const data = await api.getService(id);
-      setService(data);
-      // TODO: Vérifier si le service est en favori
+      const response = await serviceAPI.detail(id);
+      setService(response);
+      setIsFavorite(response.is_favorite || false);
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue lors du chargement du service');
+      setError('Erreur lors du chargement du service');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFavoriteClick = () => {
-    // TODO: Implémenter l'ajout/suppression des favoris
-    setIsFavorite(!isFavorite);
-  };
-
-  const handleBookAppointment = (dateTime) => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    setSelectedDateTime(dateTime);
-    setShowBookingDialog(true);
-  };
-
-  const handleConfirmBooking = async () => {
+  const handleFavoriteClick = async () => {
+    if (!user) return navigate('/login');
     try {
-      const response = await api.createAppointment({
-        serviceId: service.id,
-        date: selectedDateTime.date,
-        time: selectedDateTime.time,
-        notes: bookingNotes,
-      });
+      setIsFavorite((prev) => !prev);
+      // Implémenter côté backend l'ajout/retrait de favori
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
+  const handleAppointmentSubmit = async () => {
+    if (!user) return navigate('/login');
+    try {
+      await appointmentAPI.create({
+        service: id,
+        ...appointmentData,
+      });
+      setAppointmentDialog(false);
       navigate('/appointments');
     } catch (err) {
-      setError(err.message || 'Erreur lors de la réservation');
+      console.error('Erreur lors de la prise de rendez-vous', err);
     }
   };
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
   }
 
   if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
-
-  if (!service) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="info">Service non trouvé</Alert>
-      </Container>
-    );
+    return <Container sx={{ mt: 4 }}><Alert severity="error">{error}</Alert></Container>;
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Grid container spacing={3}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Grid container spacing={4}>
         <Grid item xs={12} md={8}>
-          <Paper elevation={2} sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-              <Typography variant="h4" component="h1">
-                {service.name}
-              </Typography>
-              <Button
-                startIcon={isFavorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                onClick={handleFavoriteClick}
-                color={isFavorite ? 'secondary' : 'default'}
-              >
-                {isFavorite ? 'Favori' : 'Ajouter aux favoris'}
-              </Button>
-            </Box>
-
-            <Box sx={{ mb: 3 }}>
-              <Rating value={service.rating} readOnly precision={0.5} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {service.review_count} avis
-              </Typography>
-            </Box>
-
-            <Typography variant="body1" paragraph>
-              {service.description}
-            </Typography>
-
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Tags
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                {service.tags.map((tag) => (
-                  <Chip key={tag} label={tag} />
-                ))}
+          <Paper sx={{ overflow: 'hidden', mb: 4 }}>
+            <Box component="img" src={service.image || '/images/placeholder.jpg'} alt={service.name} sx={{ width: '100%', height: 400, objectFit: 'cover' }} />
+            <Box sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h4" sx={{ flexGrow: 1 }}>{service.name}</Typography>
+                <IconButton onClick={handleFavoriteClick}>
+                  {isFavorite ? <FavoriteIcon color="error" /> : <FavoriteBorderIcon />}
+                </IconButton>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <LocationIcon sx={{ mr: 1 }} /><Typography>{service.location}</Typography>
+                <EuroIcon sx={{ mr: 1 }} /><Typography>{service.price}€</Typography>
+                <Rating value={service.rating} readOnly size="small" />
+              </Box>
+              <Typography paragraph>{service.description}</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {service.tags?.map((tag) => <Chip key={tag} label={tag} />)}
               </Box>
             </Box>
+          </Paper>
 
-            <Divider sx={{ my: 3 }} />
-
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-              <LocationIcon color="action" />
-              <Typography>{service.location}</Typography>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-              <TimeIcon color="action" />
-              <Typography>Durée: {service.duration} minutes</Typography>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-              <EuroIcon color="action" />
-              <Typography variant="h6">{service.price}€</Typography>
-            </Box>
-
-            <Button
-              variant="contained"
-              color="primary"
-              size="large"
-              fullWidth
-              onClick={() => setShowCalendar(true)}
-            >
-              Réserver
-            </Button>
+          <Paper sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6">Avis clients</Typography>
+            {service.reviews?.map((review) => (
+              <Box key={review.id} sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Avatar src={review.user.avatar} sx={{ mr: 2 }} />
+                  <Box>
+                    <Typography variant="subtitle1">{review.user.name}</Typography>
+                    <Rating value={review.rating} readOnly size="small" />
+                    <Typography variant="caption" color="text.secondary">{format(new Date(review.created_at), 'dd MMM yyyy', { locale: fr })}</Typography>
+                  </Box>
+                </Box>
+                <Typography sx={{ mt: 1 }}>{review.comment}</Typography>
+              </Box>
+            ))}
           </Paper>
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Paper elevation={2} sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              À propos du prestataire
-            </Typography>
+          <Paper sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6">Prestataire</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Box
-                component="img"
-                src={service.provider.avatar || '/images/placeholder.jpg'}
-                alt={service.provider.name}
-                sx={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: '50%',
-                  mr: 2,
-                }}
-              />
+              <Avatar src={service.provider.avatar} sx={{ mr: 2 }} />
               <Box>
                 <Typography variant="subtitle1">{service.provider.name}</Typography>
-                <Rating value={service.provider.rating} readOnly size="small" />
+                <Typography variant="body2" color="text.secondary">{service.provider.experience} ans</Typography>
               </Box>
             </Box>
-            <Typography variant="body2" color="text.secondary">
-              {service.provider.description}
-            </Typography>
+            <Typography variant="body2">{service.provider.description}</Typography>
+            <Button variant="outlined" fullWidth sx={{ mt: 2 }} startIcon={<ChatIcon />}>Contacter</Button>
+            <Button variant="contained" fullWidth sx={{ mt: 2 }} onClick={() => setAppointmentDialog(true)} startIcon={<CalendarIcon />}>Prendre rendez-vous</Button>
           </Paper>
         </Grid>
       </Grid>
 
-      {showCalendar && (
-        <Box sx={{ mt: 4 }}>
-          <Paper elevation={2} sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Choisissez une date et une heure
-            </Typography>
-            <AppointmentCalendar onSelectDateTime={handleBookAppointment} />
-          </Paper>
-        </Box>
-      )}
-
-      <Dialog
-        open={showBookingDialog}
-        onClose={() => setShowBookingDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Confirmer la réservation</DialogTitle>
+      <Dialog open={appointmentDialog} onClose={() => setAppointmentDialog(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Prendre rendez-vous</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" gutterBottom>
-            Voulez-vous ajouter des notes pour le prestataire ?
-          </Typography>
-          <TextField
-            fullWidth
-            multiline
-            rows={4}
-            value={bookingNotes}
-            onChange={(e) => setBookingNotes(e.target.value)}
-            placeholder="Notes pour le prestataire (optionnel)"
-            sx={{ mt: 2 }}
-          />
+          <TextField fullWidth label="Date" type="date" value={appointmentData.date} onChange={(e) => setAppointmentData({ ...appointmentData, date: e.target.value })} sx={{ mt: 2 }} InputLabelProps={{ shrink: true }} />
+          <TextField fullWidth label="Heure" type="time" value={appointmentData.time} onChange={(e) => setAppointmentData({ ...appointmentData, time: e.target.value })} sx={{ mt: 2 }} InputLabelProps={{ shrink: true }} />
+          <TextField select fullWidth label="Durée" value={appointmentData.duration} onChange={(e) => setAppointmentData({ ...appointmentData, duration: Number(e.target.value) })} sx={{ mt: 2 }}>
+            <MenuItem value={30}>30 minutes</MenuItem>
+            <MenuItem value={60}>1 heure</MenuItem>
+            <MenuItem value={90}>1h30</MenuItem>
+            <MenuItem value={120}>2 heures</MenuItem>
+          </TextField>
+          <TextField fullWidth multiline rows={4} label="Notes" value={appointmentData.notes} onChange={(e) => setAppointmentData({ ...appointmentData, notes: e.target.value })} sx={{ mt: 2 }} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowBookingDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={handleConfirmBooking}
-            sx={{
-              background: 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)',
-              '&:hover': {
-                background: 'linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)',
-              },
-            }}
-          >
-            Confirmer la réservation
-          </Button>
+          <Button onClick={() => setAppointmentDialog(false)}>Annuler</Button>
+          <Button onClick={handleAppointmentSubmit} variant="contained">Confirmer</Button>
         </DialogActions>
       </Dialog>
     </Container>
   );
 };
 
-export default ServiceDetails; 
+export default ServiceDetails;
