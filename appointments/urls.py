@@ -50,7 +50,7 @@ urlpatterns = [
     path("appointments/", AppointmentList.as_view(), name="appointment_list"),
     path("appointments/create/", CreateAppointment.as_view(), name="create_appointment"),
     path("appointments/<int:pk>/", AppointmentDetail.as_view(), name="appointment_detail"),
-    path("appointments/<int:pk>/review/", AppointmentReview.as_view(), name="appointment_review"),
+    path("appointments/<int:appointment_id>/review/", AppointmentReview.as_view(), name="appointment_review"),
     path("appointments/<int:pk>/payment/", AppointmentPayment.as_view(), name="appointment_payment"),
     path("appointments/<int:pk>/add-review/", AddReview.as_view(), name="add_review"),
 
@@ -69,8 +69,8 @@ urlpatterns = [
 
     # 🔔 Notifications
     path("notifications/", NotificationList.as_view(), name="notification_list"),
-    path("notifications/<int:pk>/read/", MarkNotificationRead.as_view(), name="mark_notification_read"),
+    path("notifications/<int:notification_id>/read/", MarkNotificationRead.as_view(), name="mark_notification_read"),
 
     # 💳 Paiement
-    path("payments/process/", ProcessPayment.as_view(), name="process_payment"),
+    path("payments/<int:appointment_id>/process/", ProcessPayment.as_view(), name="process_payment"),
 ]
