@@ -542,18 +542,22 @@ class AppointmentPayment(APIView):
 
 class ProcessPayment(APIView):
     """
-    POST /payments/process/
-    -> appointment_id dans le body
+    POST /payments/<appointment_id>/process/
+    (compat: accepte aussi appointment_id dans le body)
     """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request, appointment_id=None):
         try:
-            appointment_id = request.data.get("appointment_id") or request.data.get("appointment")
-            if not appointment_id:
+            resolved_appointment_id = (
+                appointment_id
+                or request.data.get("appointment_id")
+                or request.data.get("appointment")
+            )
+            if not resolved_appointment_id:
                 return Response({"error": "appointment_id requis."}, status=status.HTTP_400_BAD_REQUEST)
 
-            appointment = user_appointments_queryset(request.user).get(id=appointment_id)
+            appointment = user_appointments_queryset(request.user).get(id=resolved_appointment_id)
 
             payment_method = request.data.get("payment_method")
             if payment_method == "carte":
@@ -679,9 +683,9 @@ class MarkNotificationRead(APIView):
     """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, pk):
+    def post(self, request, notification_id):
         try:
-            notification = Notification.objects.get(id=pk, recipient=request.user)
+            notification = Notification.objects.get(id=notification_id, recipient=request.user)
             notification.is_read = True
             notification.save()
             return Response({"message": "Notification marquée comme lue"})

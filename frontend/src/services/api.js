@@ -120,7 +120,7 @@ export const NOTIFICATION_URLS = {
 };
 
 export const PAYMENT_URLS = {
-  PROCESS: `${API_VERSION}/payments/process/`,
+  PROCESS: (appointmentId) => `${API_VERSION}/payments/${appointmentId}/process/`,
 };
 
 /* ------------------------------------------------------------------ */
@@ -188,7 +188,7 @@ export const appointmentAPI = {
     apiRequest(APPOINTMENT_URLS.PAYMENT(id), { method: "POST", data }),
 
   addReview: (id, data) =>
-    apiRequest(APPOINTMENT_URLS.ADD_REVIEW(id), { method: "POST", data }),
+    apiRequest(APPOINTMENT_URLS.ADD_REVIEW(id), { method: "PUT", data }),
 };
 
 export const userAPI = {
@@ -231,8 +231,8 @@ export const notificationAPI = {
 };
 
 export const paymentAPI = {
-  process: (data) =>
-    apiRequest(PAYMENT_URLS.PROCESS, { method: "POST", data }),
+  process: (appointmentId, data = {}) =>
+    apiRequest(PAYMENT_URLS.PROCESS(appointmentId), { method: "POST", data }),
 };
 
 // ✅ utilisé par Search.jsx

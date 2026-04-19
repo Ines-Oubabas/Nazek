@@ -49,8 +49,8 @@ urlpatterns = [
     path("appointments/create/", CreateAppointment.as_view(), name="create_appointment"),
     path("appointments/<int:pk>/", AppointmentDetail.as_view(), name="appointment_detail"),
     path("appointments/<int:pk>/review/", AppointmentReview.as_view(), name="appointment_review"),
+    path("appointments/<int:pk>/add-review/", AddReview.as_view(), name="appointment_add_review"),
     path("appointments/<int:pk>/payment/", AppointmentPayment.as_view(), name="appointment_payment"),
-    path("appointments/<int:appointment_id>/review/", AppointmentReview.as_view(), name="appointment_review"),
 
     # 👤 Client
     path("clients/profile/", ClientProfile.as_view(), name="client_profile"),
