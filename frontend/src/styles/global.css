@@ -1,117 +1,370 @@
-/* Variables globales */
+/* =======================================================================
+   NAZEK - GLOBAL DESIGN SYSTEM
+   Fichier unique de styles globaux (évite les doublons avec theme.css)
+   ======================================================================= */
+
+/* -----------------------------
+   1) Variables (Design Tokens)
+------------------------------ */
 :root {
-  --primary-color: #007bff;
-  --secondary-color: #6c757d;
-  --success-color: #28a745;
-  --danger-color: #dc3545;
-  --warning-color: #ffc107;
-  --info-color: #17a2b8;
-  --light-color: #f8f9fa;
-  --dark-color: #343a40;
-  --border-radius: 8px;
-  --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --transition: all 0.3s ease;
+  /* Palette */
+  --primary: #1976d2;
+  --primary-700: #155fa8;
+  --secondary: #6c757d;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #06b6d4;
+
+  --bg: #f7f9fc;
+  --surface: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: rgba(15, 23, 42, 0.12);
+
+  /* Radius / Shadow */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.14);
+
+  /* Spacing */
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Transitions */
+  --t-fast: 140ms ease;
+  --t-med: 240ms ease;
+  --t-slow: 360ms ease;
+
+  /* Focus ring */
+  --ring: 0 0 0 4px rgba(25, 118, 210, 0.18);
 }
 
-/* Styles de base */
+/* -----------------------------
+   2) Reset + Base
+------------------------------ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  line-height: 1.6;
-  color: var(--dark-color);
-  background-color: var(--light-color);
+  height: 100%;
 }
 
-/* Conteneurs */
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji",
+    "Segoe UI Emoji";
+  line-height: 1.6;
+  color: var(--text);
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(25, 118, 210, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 90% 20%, rgba(6, 182, 212, 0.08), transparent 55%),
+    var(--bg);
+}
+
+#root {
+  min-height: 100%;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--t-fast);
+}
+a:hover {
+  color: var(--primary-700);
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Sélection texte */
+::selection {
+  background: rgba(25, 118, 210, 0.18);
+}
+
+/* Scrollbar (Chrome/Edge) */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(31, 41, 55, 0.22);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 41, 55, 0.35);
+}
+
+/* -----------------------------
+   3) Layout
+------------------------------ */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.content {
+  flex: 1;
+}
+
 .container {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 var(--space-5);
 }
 
-/* Cartes */
+/* Wrapper page (utile si tu veux centrer les pages) */
+.page {
+  padding: var(--space-6) 0;
+}
+
+.section-title {
+  margin: 0 0 var(--space-4);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* -----------------------------
+   4) Cards / Surfaces
+------------------------------ */
 .card {
-  border: none;
-  border-radius: var(--border-radius);
-  box-shadow: var(--box-shadow);
-  transition: var(--transition);
-  margin-bottom: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: transform var(--t-med), box-shadow var(--t-med);
+  margin-bottom: var(--space-5);
 }
 
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {
-  background-color: var(--primary-color);
-  color: white;
-  border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.95), rgba(6, 182, 212, 0.85));
+  color: #fff;
 }
 
-/* Boutons */
+.card-body {
+  padding: var(--space-5);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+}
+
+/* -----------------------------
+   5) Buttons
+------------------------------ */
 .btn {
-  border-radius: var(--border-radius);
-  padding: 0.5rem 1.5rem;
-  transition: var(--transition);
-  font-weight: 500;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--t-fast), box-shadow var(--t-fast), background var(--t-fast), border-color var(--t-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 .btn-primary {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(25, 118, 210, 0.22);
 }
 
 .btn-primary:hover {
-  background-color: #0056b3;
-  border-color: #0056b3;
-  transform: translateY(-2px);
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+  transform: translateY(-1px);
 }
 
-/* Formulaires */
-.form-control {
-  border-radius: var(--border-radius);
-  border: 1px solid #ced4da;
-  padding: 0.75rem;
-  transition: var(--transition);
+.btn-light {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--text);
 }
 
-.form-control:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+.btn-light:hover {
+  background: rgba(0, 0, 0, 0.02);
+  transform: translateY(-1px);
 }
 
-/* Navigation */
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+}
+
+/* -----------------------------
+   6) Forms
+------------------------------ */
+.form-control,
+input,
+select,
+textarea {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 12px 12px;
+  background: #fff;
+  color: var(--text);
+  transition: box-shadow var(--t-fast), border-color var(--t-fast);
+}
+
+.form-control:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(25, 118, 210, 0.65);
+  box-shadow: var(--ring);
+}
+
+label {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+/* -----------------------------
+   7) Navbar / Footer (si tu utilises ces classes)
+------------------------------ */
 .navbar {
-  box-shadow: var(--box-shadow);
-  background-color: white !important;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .navbar-brand {
-  font-weight: bold;
-  color: var(--primary-color) !important;
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--primary) !important;
 }
 
 .nav-link {
-  color: var(--dark-color) !important;
-  transition: var(--transition);
+  color: var(--text) !important;
+  transition: color var(--t-fast);
 }
-
 .nav-link:hover {
-  color: var(--primary-color) !important;
+  color: var(--primary) !important;
 }
 
-/* Badges */
+footer {
+  background: #111827;
+  color: rgba(255, 255, 255, 0.92);
+  padding: var(--space-6) 0;
+  margin-top: auto;
+}
+
+footer a {
+  color: rgba(255, 255, 255, 0.92);
+  text-decoration: none;
+}
+footer a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* -----------------------------
+   8) Tables
+------------------------------ */
+.table {
+  width: 100%;
+  background: #fff;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.table thead th {
+  background: #0f172a;
+  color: #fff;
+  border: none;
+  padding: 12px;
+  text-align: left;
+}
+
+.table td {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* -----------------------------
+   9) Alerts / Badges
+------------------------------ */
+.alert {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  padding: 12px 14px;
+}
+
 .badge {
-  padding: 0.5em 1em;
-  border-radius: var(--border-radius);
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.02);
 }
 
-/* Animations */
-@keyframes fadeIn {
+/* -----------------------------
+   10) Animations
+------------------------------ */
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -120,101 +373,49 @@ body {
 }
 
 .fade-in {
-  animation: fadeIn 0.5s ease-out;
+  animation: fadeInUp 240ms ease-out;
 }
 
-/* Responsive */
+/* -----------------------------
+   11) Utilities
+------------------------------ */
+.text-primary {
+  color: var(--primary) !important;
+}
+.bg-primary {
+  background: var(--primary) !important;
+}
+.shadow-sm {
+  box-shadow: var(--shadow-sm) !important;
+}
+.rounded {
+  border-radius: var(--radius-md) !important;
+}
+
+/* -----------------------------
+   12) Responsive
+------------------------------ */
 @media (max-width: 768px) {
   .container {
-    padding: 0 0.5rem;
+    padding: 0 var(--space-3);
   }
-  
-  .card {
-    margin-bottom: 1rem;
+
+  .page {
+    padding: var(--space-5) 0;
   }
-  
+
   .btn {
     width: 100%;
-    margin-bottom: 0.5rem;
   }
 }
 
-/* Utilitaires */
-.text-primary {
-  color: var(--primary-color) !important;
+/* -----------------------------
+   13) Accessibilité / Motion
+------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
-
-.bg-primary {
-  background-color: var(--primary-color) !important;
-}
-
-.shadow-sm {
-  box-shadow: var(--box-shadow) !important;
-}
-
-.rounded {
-  border-radius: var(--border-radius) !important;
-}
-
-/* Footer */
-footer {
-  background-color: var(--dark-color);
-  color: white;
-  padding: 2rem 0;
-  margin-top: auto;
-}
-
-footer a {
-  color: white;
-  text-decoration: none;
-  transition: var(--transition);
-}
-
-footer a:hover {
-  color: var(--primary-color);
-}
-
-/* Loading Spinner */
-.spinner-border {
-  width: 3rem;
-  height: 3rem;
-  border-width: 0.25rem;
-}
-
-/* Alertes */
-.alert {
-  border-radius: var(--border-radius);
-  border: none;
-  box-shadow: var(--box-shadow);
-}
-
-/* Tables */
-.table {
-  background-color: white;
-  border-radius: var(--border-radius);
-  overflow: hidden;
-}
-
-.table thead th {
-  background-color: var(--dark-color);
-  color: white;
-  border: none;
-}
-
-/* Images */
-.img-fluid {
-  border-radius: var(--border-radius);
-}
-
-/* Icônes */
-.icon-lg {
-  font-size: 2rem;
-}
-
-.icon-md {
-  font-size: 1.5rem;
-}
-
-.icon-sm {
-  font-size: 1rem;
-} 

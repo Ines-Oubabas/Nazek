@@ -1,42 +1,44 @@
 // frontend/src/pages/Login.jsx
-import React, { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import {
-  Container,
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Link,
-  Alert,
-  Paper,
-} from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState } from "react";
+import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
+import { Container, Box, Typography, TextField, Button, Link, Alert, Paper } from "@mui/material";
+import { useAuth } from "../contexts/AuthContext";
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+
+  // ✅ si on vient d'une page protégée, ServiceDetails fait:
+  // navigate("/login", { state: { from: location.pathname } })
+  const from = location.state?.from || "/";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!email || !password) {
-      setError('Veuillez remplir tous les champs.');
+      setError("Veuillez remplir tous les champs.");
       return;
     }
 
     try {
-      setError('');
+      setError("");
       setLoading(true);
+
       await login(email, password);
-      navigate('/');
+
+      // ✅ retour là où l’utilisateur était
+      navigate(from, { replace: true });
     } catch (err) {
       console.error(err);
-      const message = err.response?.data?.error || "Échec de la connexion. Veuillez vérifier vos identifiants.";
+
+      // Ton apiRequest lance new Error(message) => err.message est fiable
+      const message = err?.message || "Échec de la connexion. Veuillez vérifier vos identifiants.";
       setError(message);
     } finally {
       setLoading(false);
@@ -70,6 +72,7 @@ const Login = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+
             <TextField
               margin="normal"
               required
@@ -90,13 +93,13 @@ const Login = () => {
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
             >
-              {loading ? 'Connexion en cours...' : 'Se connecter'}
+              {loading ? "Connexion en cours..." : "Se connecter"}
             </Button>
           </Box>
 
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Box sx={{ mt: 2, textAlign: "center" }}>
             <Typography variant="body2">
-              Vous n'avez pas de compte ?{' '}
+              Vous n&apos;avez pas de compte ?{" "}
               <Link component={RouterLink} to="/register">
                 Inscrivez-vous
               </Link>

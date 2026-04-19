@@ -1,41 +1,41 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  Grid,
-  Button,
-  Chip,
-  useTheme,
-  Fade,
-} from '@mui/material';
-import { format, addDays, isSameDay, parseISO } from 'date-fns';
-import { fr } from 'date-fns/locale';
+// frontend/src/components/common/AppointmentCalendar.jsx
+import React, { useMemo, useState } from "react";
+import { Box, Paper, Typography, Grid, Button, Chip, useTheme, Fade } from "@mui/material";
+import { format, addDays, isSameDay } from "date-fns";
+import { fr } from "date-fns/locale";
 
-const timeSlots = [
-  '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00',
-];
+const DEFAULT_TIME_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00"];
 
-const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
+const AppointmentCalendar = ({ onSelectDateTime, provider, timeSlots = DEFAULT_TIME_SLOTS }) => {
   const theme = useTheme();
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null); // Date (jour)
+  const [selectedTime, setSelectedTime] = useState(""); // "HH:MM"
 
-  const availableDates = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
+  const availableDates = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(new Date(), i)),
+    []
+  );
 
   const handleDateSelect = (date) => {
     setSelectedDate(date);
-    setSelectedTime(null);
+    setSelectedTime("");
   };
 
   const handleTimeSelect = (time) => {
     setSelectedTime(time);
-    if (selectedDate) {
-      const dateTime = new Date(selectedDate);
-      const [hours, minutes] = time.split(':');
-      dateTime.setHours(parseInt(hours), parseInt(minutes));
-      onSelectDateTime(dateTime);
-    }
+  };
+
+  const handleConfirm = () => {
+    if (!selectedDate || !selectedTime) return;
+    if (typeof onSelectDateTime !== "function") return;
+
+    // ✅ Format stable pour le backend
+    const payload = {
+      date: format(selectedDate, "yyyy-MM-dd"),
+      time: selectedTime, // "HH:MM"
+    };
+
+    onSelectDateTime(payload);
   };
 
   return (
@@ -43,8 +43,8 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
       elevation={3}
       sx={{
         p: 3,
-        background: 'rgba(255, 255, 255, 0.9)',
-        backdropFilter: 'blur(10px)',
+        background: "rgba(255, 255, 255, 0.9)",
+        backdropFilter: "blur(10px)",
         borderRadius: 2,
       }}
     >
@@ -53,9 +53,9 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         gutterBottom
         sx={{
           fontWeight: 600,
-          background: 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
+          background: "linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
         }}
       >
         Sélectionnez une date et une heure
@@ -65,15 +65,16 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         <Typography variant="subtitle1" gutterBottom>
           Dates disponibles
         </Typography>
+
         <Grid container spacing={1} sx={{ mb: 3 }}>
           {availableDates.map((date) => (
             <Grid item key={date.toISOString()}>
               <Chip
-                label={format(date, 'EEE d MMM', { locale: fr })}
+                label={format(date, "EEE d MMM", { locale: fr })}
                 onClick={() => handleDateSelect(date)}
-                color={selectedDate && isSameDay(selectedDate, date) ? 'primary' : 'default'}
+                color={selectedDate && isSameDay(selectedDate, date) ? "primary" : "default"}
                 sx={{
-                  '&:hover': {
+                  "&:hover": {
                     background: theme.palette.primary.light,
                     color: theme.palette.primary.contrastText,
                   },
@@ -84,20 +85,21 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         </Grid>
 
         {selectedDate && (
-          <Fade in={true}>
+          <Fade in>
             <Box>
               <Typography variant="subtitle1" gutterBottom>
                 Créneaux horaires disponibles
               </Typography>
+
               <Grid container spacing={1}>
                 {timeSlots.map((time) => (
                   <Grid item key={time}>
                     <Chip
                       label={time}
                       onClick={() => handleTimeSelect(time)}
-                      color={selectedTime === time ? 'primary' : 'default'}
+                      color={selectedTime === time ? "primary" : "default"}
                       sx={{
-                        '&:hover': {
+                        "&:hover": {
                           background: theme.palette.primary.light,
                           color: theme.palette.primary.contrastText,
                         },
@@ -111,20 +113,22 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
         )}
 
         {selectedDate && selectedTime && (
-          <Fade in={true}>
-            <Box sx={{ mt: 3, textAlign: 'center' }}>
+          <Fade in>
+            <Box sx={{ mt: 3, textAlign: "center" }}>
               <Typography variant="body1" gutterBottom>
-                Vous avez sélectionné le {format(selectedDate, 'EEEE d MMMM', { locale: fr })} à {selectedTime}
+                Vous avez sélectionné le{" "}
+                {format(selectedDate, "EEEE d MMMM", { locale: fr })} à {selectedTime}
               </Typography>
+
               <Button
                 variant="contained"
-                onClick={() => onSelectDateTime(new Date(selectedDate.setHours(...selectedTime.split(':'))))}
+                onClick={handleConfirm}
                 sx={{
-                  background: 'linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)',
-                  boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
-                  '&:hover': {
-                    background: 'linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)',
-                    transform: 'translateY(-2px)',
+                  background: "linear-gradient(45deg, #2196f3 30%, #21CBF3 90%)",
+                  boxShadow: "0 3px 5px 2px rgba(33, 203, 243, .3)",
+                  "&:hover": {
+                    background: "linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)",
+                    transform: "translateY(-2px)",
                   },
                 }}
               >
@@ -138,4 +142,4 @@ const AppointmentCalendar = ({ onSelectDateTime, provider }) => {
   );
 };
 
-export default AppointmentCalendar; 
+export default AppointmentCalendar;
