@@ -16,7 +16,13 @@ import {
   Step,
   StepLabel,
   Divider,
+  Stack,
+  Chip,
 } from "@mui/material";
+import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import { alpha } from "@mui/material/styles";
 
 import { useAuth } from "../contexts/AuthContext";
 import ServiceSelection from "../components/common/ServiceSelection";
@@ -33,22 +39,17 @@ const buildUsernameFromEmail = (email) => {
     .replace(/[^a-z0-9_]/g, "")
     .slice(0, 25);
 
-  // fallback si email bizarre
   return base || `user_${Math.floor(Date.now() / 1000)}`;
 };
 
 const formatDRFErrors = (data) => {
-  // DRF peut renvoyer: {field: ["msg1","msg2"], non_field_errors:[...]}
   if (!data || typeof data !== "object") return null;
 
   const lines = [];
   Object.entries(data).forEach(([key, val]) => {
-    if (Array.isArray(val)) {
-      lines.push(`${key}: ${val.join(" ")}`);
-    } else if (typeof val === "string") {
-      lines.push(`${key}: ${val}`);
-    } else if (val && typeof val === "object") {
-      // cas nested
+    if (Array.isArray(val)) lines.push(`${key}: ${val.join(" ")}`);
+    else if (typeof val === "string") lines.push(`${key}: ${val}`);
+    else if (val && typeof val === "object") {
       try {
         lines.push(`${key}: ${JSON.stringify(val)}`);
       } catch {
@@ -61,7 +62,6 @@ const formatDRFErrors = (data) => {
 };
 
 const normalizeServiceValue = (value) => {
-  // Supporte: "3", 3, {id:3}, {value:3}...
   if (!value) return null;
   if (typeof value === "object") return value.id ?? value.value ?? null;
   return value;
@@ -75,17 +75,14 @@ const Register = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Étape 0 - Infos perso
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
-  // Étape 1 - Type de compte
   const [isEmployer, setIsEmployer] = useState(false);
 
-  // Étape 2 - Coordonnées (+ prestataire)
   const [selectedService, setSelectedService] = useState("");
   const [serviceDescription, setServiceDescription] = useState("");
   const [phone, setPhone] = useState("");
@@ -116,24 +113,21 @@ const Register = () => {
       return "";
     }
 
-    if (stepIndex === 1) {
-      // aucun champ obligatoire ici
-      return "";
-    }
+    if (stepIndex === 1) return "";
 
     if (stepIndex === 2) {
       if (!ph || !addr) return "Veuillez renseigner votre téléphone et votre adresse.";
-      if (isEmployer) {
-        if (!selectedService) return "Veuillez sélectionner un service proposé.";
-        // description pas obligatoire côté backend, mais utile
-      }
+      if (isEmployer && !selectedService) return "Veuillez sélectionner un service proposé.";
       return "";
     }
 
     return "";
   };
 
-  const canGoNext = useMemo(() => !validateStep(activeStep), [activeStep, email, password, confirmPassword, firstName, lastName, phone, address, isEmployer, selectedService]);
+  const canGoNext = useMemo(
+    () => !validateStep(activeStep),
+    [activeStep, email, password, confirmPassword, firstName, lastName, phone, address, isEmployer, selectedService]
+  );
 
   const handleNext = () => {
     const msg = validateStep(activeStep);
@@ -161,8 +155,6 @@ const Register = () => {
     setLoading(true);
 
     try {
-      // ✅ Payload compatible backend (UserSerializer + RegisterView)
-      // IMPORTANT: on n'envoie PAS service_type/service_description ici (sinon 400)
       const role = isEmployer ? "employer" : "client";
       const payload = {
         username: buildUsernameFromEmail(email),
@@ -177,8 +169,6 @@ const Register = () => {
 
       const res = await register(payload);
 
-      // ✅ Bonus: si prestataire, on essaye de compléter le profil employeur (service + phone + name)
-      // (si ça échoue, le compte est quand même créé => on ne bloque pas)
       if (isEmployer) {
         const serviceValue = normalizeServiceValue(selectedService);
         if (serviceValue) {
@@ -188,15 +178,13 @@ const Register = () => {
               email: String(email || "").trim(),
               phone: String(phone || "").trim(),
               service: serviceValue,
-              // serviceDescription non géré par EmployerUpdateSerializer actuellement
             });
-          } catch (e) {
-            // ignore
+          } catch {
+            // non bloquant
           }
         }
       }
 
-      // tu peux rediriger où tu veux (home / profile)
       navigate("/");
       return res;
     } catch (err) {
@@ -207,24 +195,19 @@ const Register = () => {
     }
   };
 
-  // Form submit (Enter) : next si pas dernière étape, sinon submit final
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
 
-    if (activeStep < 2) {
-      handleNext();
-    } else {
-      await handleFinalSubmit();
-    }
+    if (activeStep < 2) handleNext();
+    else await handleFinalSubmit();
   };
 
   const renderStepContent = () => {
     if (activeStep === 0) {
       return (
-        <Box sx={{ mt: 2 }}>
+        <Stack spacing={1.3} sx={{ mt: 1.5 }}>
           <TextField
-            margin="normal"
             required
             fullWidth
             label="Prénom"
@@ -233,7 +216,6 @@ const Register = () => {
             autoComplete="given-name"
           />
           <TextField
-            margin="normal"
             required
             fullWidth
             label="Nom"
@@ -242,7 +224,6 @@ const Register = () => {
             autoComplete="family-name"
           />
           <TextField
-            margin="normal"
             required
             fullWidth
             label="Email"
@@ -252,7 +233,6 @@ const Register = () => {
             autoComplete="email"
           />
           <TextField
-            margin="normal"
             required
             fullWidth
             label="Mot de passe"
@@ -263,7 +243,6 @@ const Register = () => {
             helperText="Minimum 6 caractères."
           />
           <TextField
-            margin="normal"
             required
             fullWidth
             label="Confirmer le mot de passe"
@@ -277,43 +256,45 @@ const Register = () => {
             fullWidth
             variant="contained"
             type="submit"
-            sx={{ mt: 3 }}
+            endIcon={<ArrowForwardIcon />}
             disabled={!canGoNext || loading}
+            sx={{ mt: 0.4 }}
           >
             Suivant
           </Button>
-        </Box>
+        </Stack>
       );
     }
 
     if (activeStep === 1) {
       return (
-        <Box sx={{ mt: 2 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={isEmployer}
-                onChange={(e) => setIsEmployer(e.target.checked)}
-              />
-            }
-            label="Je suis un prestataire de services"
-          />
+        <Box sx={{ mt: 1.5 }}>
+          <Paper
+            sx={{
+              p: 1.6,
+              borderRadius: 2.5,
+              border: "1px solid",
+              borderColor: "divider",
+              mb: 1.2,
+              bgcolor: alpha("#1f2430", 0.52),
+            }}
+          >
+            <FormControlLabel
+              control={<Switch checked={isEmployer} onChange={(e) => setIsEmployer(e.target.checked)} />}
+              label="Je suis un prestataire de services"
+            />
+            <Typography variant="body2" color="text.secondary">
+              {isEmployer
+                ? "Vous pourrez proposer des services et recevoir des demandes de rendez-vous."
+                : "Vous pourrez réserver des services et suivre vos rendez-vous."}
+            </Typography>
+          </Paper>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {isEmployer
-              ? "Vous pourrez proposer un service et recevoir des demandes de rendez-vous."
-              : "Vous pourrez réserver des services et gérer vos rendez-vous."}
-          </Typography>
-
-          <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between" }}>
-            <Button type="button" onClick={handleBack}>
+          <Box sx={{ mt: 1.2, display: "flex", justifyContent: "space-between" }}>
+            <Button type="button" onClick={handleBack} startIcon={<ArrowBackIcon />}>
               Retour
             </Button>
-            <Button
-              variant="contained"
-              type="submit"
-              disabled={loading}
-            >
+            <Button variant="contained" type="submit" endIcon={<ArrowForwardIcon />} disabled={loading}>
               Suivant
             </Button>
           </Box>
@@ -321,27 +302,26 @@ const Register = () => {
       );
     }
 
-    // step 2
     return (
-      <Box sx={{ mt: 2 }}>
-        <TextField
-          margin="normal"
-          required
-          fullWidth
-          label="Téléphone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          autoComplete="tel"
-        />
-        <TextField
-          margin="normal"
-          required
-          fullWidth
-          label="Adresse"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          autoComplete="street-address"
-        />
+      <Box sx={{ mt: 1.5 }}>
+        <Stack spacing={1.3}>
+          <TextField
+            required
+            fullWidth
+            label="Téléphone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+          />
+          <TextField
+            required
+            fullWidth
+            label="Adresse"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            autoComplete="street-address"
+          />
+        </Stack>
 
         {isEmployer && (
           <>
@@ -363,16 +343,12 @@ const Register = () => {
           </>
         )}
 
-        <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between" }}>
-          <Button type="button" onClick={handleBack}>
+        <Box sx={{ mt: 2.1, display: "flex", justifyContent: "space-between" }}>
+          <Button type="button" onClick={handleBack} startIcon={<ArrowBackIcon />}>
             Retour
           </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading || !canGoNext}
-          >
-            {loading ? "Inscription en cours..." : "S'inscrire"}
+          <Button type="submit" variant="contained" disabled={loading || !canGoNext}>
+            {loading ? "Inscription en cours..." : "Créer mon compte"}
           </Button>
         </Box>
       </Box>
@@ -380,12 +356,25 @@ const Register = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, mb: 4 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h4" component="h1" align="center" gutterBottom>
-            Inscription
-          </Typography>
+    <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+      <Box sx={{ maxWidth: 720, mx: "auto" }}>
+        <Paper
+          sx={{
+            p: { xs: 2.2, md: 3.2 },
+            borderRadius: 4,
+            background:
+              "radial-gradient(circle at 12% -35%, rgba(255,138,28,.2), transparent 35%), #171a21",
+          }}
+        >
+          <Stack spacing={1.1} sx={{ mb: 2.2 }}>
+            <Chip icon={<PersonAddAlt1Icon />} label="Nouveau compte" color="primary" sx={{ width: "fit-content" }} />
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              Inscription
+            </Typography>
+            <Typography color="text.secondary">
+              Créez votre compte en quelques étapes et accédez à votre espace premium.
+            </Typography>
+          </Stack>
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -393,7 +382,15 @@ const Register = () => {
             </Alert>
           )}
 
-          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+          <Stepper
+            activeStep={activeStep}
+            sx={{
+              mb: 2.2,
+              "& .MuiStepLabel-label": { color: "text.secondary" },
+              "& .MuiStepLabel-label.Mui-active": { color: "text.primary", fontWeight: 700 },
+              "& .MuiStepLabel-label.Mui-completed": { color: "text.primary" },
+            }}
+          >
             {steps.map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
@@ -405,10 +402,20 @@ const Register = () => {
             {renderStepContent()}
           </Box>
 
-          <Box sx={{ mt: 2, textAlign: "center" }}>
-            <Typography variant="body2">
+          <Box
+            sx={{
+              mt: 2.2,
+              p: 1.5,
+              borderRadius: 2.5,
+              border: "1px solid",
+              borderColor: "divider",
+              backgroundColor: alpha("#1f2430", 0.52),
+              textAlign: "center",
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
               Vous avez déjà un compte ?{" "}
-              <Link component={RouterLink} to="/login">
+              <Link component={RouterLink} to="/login" underline="hover" sx={{ fontWeight: 700 }}>
                 Connectez-vous
               </Link>
             </Typography>

@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   Container,
   Grid,
-  Card,
-  CardContent,
   Typography,
   Box,
   Button,
@@ -17,775 +15,425 @@ import {
   TextField,
   CircularProgress,
   Paper,
-  useTheme,
-  useMediaQuery,
-  Stepper,
-  Step,
-  StepLabel,
   Alert,
-  Snackbar,
   Divider,
-  IconButton,
-  Tooltip,
-  Fade,
-  LinearProgress,
   Rating,
-  Tabs,
-  Tab,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemAvatar,
-  ListItemSecondaryAction,
-} from '@mui/material';
+  Stack,
+  MenuItem,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import {
   LocationOn as LocationIcon,
   AccessTime as TimeIcon,
   AttachMoney as MoneyIcon,
   Person as PersonIcon,
   CalendarToday as CalendarIcon,
-  Chat as ChatIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  Payment as PaymentIcon,
-  Description as DescriptionIcon,
-  Edit as EditIcon,
-  Share as ShareIcon,
-  Receipt as ReceiptIcon,
-  Star as StarIcon,
   Verified as VerifiedIcon,
-  Photo as PhotoIcon,
-  Favorite as FavoriteIcon,
-  FavoriteBorder as FavoriteBorderIcon,
-  Report as ReportIcon,
-} from '@mui/icons-material';
-import { format, parseISO } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import api, { EMPLOYERS_URL, EMPLOYER_AVAILABILITY_URL } from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
-import LocationSelector from '../components/common/LocationSelector';
-import PaymentSelector from '../components/common/PaymentSelector';
+} from "@mui/icons-material";
+
+import { useAuth } from "../contexts/AuthContext";
+import { employerAPI, serviceAPI, appointmentAPI } from "../services/api";
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+const toDateInputValue = (date) => {
+  if (!(date instanceof Date)) return "";
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
 
 const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [provider, setProvider] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState(0);
-  const [bookingDialog, setBookingDialog] = useState(false);
-  const [reviewDialog, setReviewDialog] = useState(false);
-  const [reportDialog, setReportDialog] = useState(false);
-  const [chatDialog, setChatDialog] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [bookingData, setBookingData] = useState({
-    date: '',
-    time: '',
-    service: '',
-    location: '',
-    notes: '',
-  });
-  const [review, setReview] = useState({ rating: 0, comment: '' });
-  const [report, setReport] = useState({ reason: '', description: '' });
-  const [favorite, setFavorite] = useState(false);
+  const [services, setServices] = useState([]);
+  const [availabilities, setAvailabilities] = useState([]);
 
-  useEffect(() => {
-    fetchProviderDetails();
-    fetchMessages();
-    checkFavorite();
-  }, [id]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [bookingDialog, setBookingDialog] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+
+  const [bookingData, setBookingData] = useState({
+    service: "",
+    date: toDateInputValue(new Date()),
+    time: "10:00",
+    notes: "",
+  });
+
+  const providerName = useMemo(() => {
+    if (!provider) return "Prestataire";
+    return (
+      provider.name ||
+      provider.user?.username ||
+      provider.user?.email ||
+      `Prestataire #${provider.id}`
+    );
+  }, [provider]);
+
+  const providerEmail = useMemo(() => {
+    return provider?.email || provider?.user?.email || "";
+  }, [provider]);
+
+  const providerDescription = useMemo(() => {
+    return provider?.description || "Prestataire professionnel disponible sur la plateforme.";
+  }, [provider]);
+
+  const providerRating = useMemo(() => {
+    const v = Number(provider?.average_rating || 0);
+    return Number.isFinite(v) ? v : 0;
+  }, [provider]);
+
+  const providerRate = useMemo(() => {
+    const r = provider?.hourly_rate;
+    if (r === null || r === undefined || r === "") return null;
+    return r;
+  }, [provider]);
+
+  const resolveDayLabel = (day) => {
+    const map = {
+      0: "Lundi",
+      1: "Mardi",
+      2: "Mercredi",
+      3: "Jeudi",
+      4: "Vendredi",
+      5: "Samedi",
+      6: "Dimanche",
+    };
+    return map[day] ?? `Jour ${day}`;
+  };
 
   const fetchProviderDetails = async () => {
     try {
-      const response = await api.get(`${EMPLOYERS_URL}${id}/`);
-      setProvider(response.data);
+      setLoading(true);
+      setError("");
+
+      // 1) Récupérer la liste des prestataires puis trouver celui demandé
+      const employersRaw = await employerAPI.list();
+      const employers = Array.isArray(employersRaw) ? employersRaw : employersRaw?.results ?? [];
+      const current = employers.find((e) => String(e.id) === String(id));
+
+      if (!current) {
+        setProvider(null);
+        setError("Prestataire introuvable.");
+        return;
+      }
+
+      setProvider(current);
+
+      // 2) Services (pour réservation)
+      const servicesRaw = await serviceAPI.list();
+      const servicesList = Array.isArray(servicesRaw) ? servicesRaw : servicesRaw?.results ?? [];
+      setServices(servicesList);
+
+      // service par défaut
+      const defaultServiceId =
+        current?.service?.id || current?.service || servicesList?.[0]?.id || "";
+      setBookingData((prev) => ({ ...prev, service: String(defaultServiceId || "") }));
+
+      // 3) Disponibilités du prestataire
+      try {
+        const avRaw = await employerAPI.getAvailabilities(current.id);
+        const avList = Array.isArray(avRaw) ? avRaw : avRaw?.results ?? [];
+        setAvailabilities(avList);
+      } catch {
+        // endpoint dispo mais peut être vide/partiel
+        setAvailabilities([]);
+      }
     } catch (err) {
-      setError('Erreur lors du chargement des informations');
-      console.error(err);
+      setError(err.message || "Erreur lors du chargement du prestataire.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMessages = async () => {
-    if (!user) return;
-    try {
-      const response = await api.get(`/api/v1/messages/?provider=${id}`);
-      setMessages(response.data);
-    } catch (err) {
-      console.error('Erreur lors du chargement des messages:', err);
-    }
-  };
+  useEffect(() => {
+    fetchProviderDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-  const checkFavorite = async () => {
-    if (!user) return;
-    try {
-      const response = await api.get(`/api/v1/favorites/`);
-      setFavorite(response.data.some((f) => f.provider.id === parseInt(id)));
-    } catch (err) {
-      console.error('Erreur lors de la vérification des favoris:', err);
-    }
-  };
-
-  const handleFavorite = async () => {
+  const openBooking = () => {
     if (!user) {
-      setSnackbar({
-        open: true,
-        message: 'Connectez-vous pour ajouter aux favoris',
-        severity: 'warning',
-      });
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
+    setBookingDialog(true);
+  };
 
-    try {
-      if (favorite) {
-        await api.delete(`/api/v1/favorites/${id}/`);
-        setSnackbar({
-          open: true,
-          message: 'Retiré des favoris',
-          severity: 'success',
-        });
-      } else {
-        await api.post('/api/v1/favorites/', { provider: id });
-        setSnackbar({
-          open: true,
-          message: 'Ajouté aux favoris',
-          severity: 'success',
-        });
-      }
-      setFavorite(!favorite);
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de la modification des favoris',
-        severity: 'error',
-      });
-    }
+  const closeBooking = () => {
+    setBookingDialog(false);
   };
 
   const handleBookingSubmit = async () => {
     try {
-      await api.post('/api/v1/appointments/', {
-        provider: id,
-        ...bookingData,
+      if (!user) {
+        navigate("/login", { state: { from: location.pathname } });
+        return;
+      }
+
+      if (!provider?.id) throw new Error("Prestataire introuvable.");
+      if (!bookingData.service) throw new Error("Veuillez sélectionner un service.");
+      if (!bookingData.date || !bookingData.time) {
+        throw new Error("Veuillez sélectionner une date et une heure.");
+      }
+
+      setBookingLoading(true);
+
+      await appointmentAPI.create({
+        employer: provider.id,
+        service: Number(bookingData.service),
+        date: bookingData.date, // YYYY-MM-DD
+        time: bookingData.time, // HH:mm
+        notes: bookingData.notes,
       });
-      setSnackbar({
-        open: true,
-        message: 'Rendez-vous créé avec succès',
-        severity: 'success',
-      });
+
       setBookingDialog(false);
-      navigate('/appointments');
+      navigate("/appointments");
     } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de la création du rendez-vous',
-        severity: 'error',
-      });
-    }
-  };
-
-  const handleReviewSubmit = async () => {
-    try {
-      await api.post('/api/v1/reviews/', {
-        provider: id,
-        rating: review.rating,
-        comment: review.comment,
-      });
-      setSnackbar({
-        open: true,
-        message: 'Avis publié avec succès',
-        severity: 'success',
-      });
-      setReviewDialog(false);
-      fetchProviderDetails();
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de la publication de l\'avis',
-        severity: 'error',
-      });
-    }
-  };
-
-  const handleReportSubmit = async () => {
-    try {
-      await api.post('/api/v1/reports/', {
-        provider: id,
-        reason: report.reason,
-        description: report.description,
-      });
-      setSnackbar({
-        open: true,
-        message: 'Signalement envoyé avec succès',
-        severity: 'success',
-      });
-      setReportDialog(false);
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de l\'envoi du signalement',
-        severity: 'error',
-      });
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!message.trim()) return;
-    try {
-      const response = await api.post('/api/v1/messages/', {
-        provider: id,
-        content: message,
-      });
-      setMessages((prev) => [...prev, response.data]);
-      setMessage('');
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de l\'envoi du message',
-        severity: 'error',
-      });
-    }
-  };
-
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setSnackbar({
-        open: true,
-        message: 'Lien copié dans le presse-papiers',
-        severity: 'success',
-      });
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de la copie du lien',
-        severity: 'error',
-      });
+      setError(err.message || "Erreur lors de la création du rendez-vous.");
+    } finally {
+      setBookingLoading(false);
     }
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
         <CircularProgress />
       </Box>
     );
   }
 
-  if (error) {
+  if (!provider) {
     return (
-      <Alert severity="error" sx={{ m: 2 }}>
-        {error}
-      </Alert>
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Alert severity="error">{error || "Prestataire introuvable."}</Alert>
+      </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Grid container spacing={3}>
-        {/* En-tête du profil */}
+    <Container maxWidth="xl" sx={{ py: 2 }}>
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      <Grid container spacing={2.2}>
+        {/* Header profil */}
         <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 3 }}>
-                <Avatar
-                  src={provider?.profile_picture}
-                  sx={{ width: 120, height: 120, mr: 3 }}
-                />
-                <Box sx={{ flexGrow: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="h4">{provider?.name}</Typography>
-                    <VerifiedIcon
-                      sx={{ color: 'primary.main', ml: 1, fontSize: 24 }}
-                    />
-                    <Box sx={{ ml: 'auto' }}>
-                      <Tooltip title="Partager">
-                        <IconButton onClick={handleShare}>
-                          <ShareIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Contacter">
-                        <IconButton onClick={() => setChatDialog(true)}>
-                          <ChatIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
-                        <IconButton onClick={handleFavorite} color="primary">
-                          {favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Signaler">
-                        <IconButton onClick={() => setReportDialog(true)}>
-                          <ReportIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <StarIcon sx={{ color: 'warning.main', mr: 0.5 }} />
-                      <Typography>{provider?.rating}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <MoneyIcon sx={{ mr: 0.5, color: 'success.main' }} />
-                      <Typography>{provider?.hourly_rate}€/h</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <LocationIcon sx={{ mr: 0.5, color: 'info.main' }} />
-                      <Typography>{provider?.location}</Typography>
-                    </Box>
-                  </Box>
-                  <Typography color="text.secondary" paragraph>
-                    {provider?.bio}
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    startIcon={<CalendarIcon />}
-                    onClick={() => setBookingDialog(true)}
-                  >
-                    Prendre rendez-vous
-                  </Button>
-                </Box>
-              </Box>
-
-              <Tabs
-                value={activeTab}
-                onChange={(event, newValue) => setActiveTab(newValue)}
-                sx={{ borderBottom: 1, borderColor: 'divider' }}
+          <Paper
+            sx={{
+              p: { xs: 2, md: 3 },
+              borderRadius: 4,
+              background:
+                "radial-gradient(circle at 10% -30%, rgba(255,138,28,.14), transparent 38%), #171a21",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={2}
+              alignItems={{ xs: "flex-start", md: "center" }}
+            >
+              <Avatar
+                src={provider?.profile_picture}
+                sx={{
+                  width: 88,
+                  height: 88,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: alpha("#ff8a1c", 0.18),
+                  color: "primary.main",
+                }}
               >
-                <Tab label="À propos" />
-                <Tab label="Services" />
-                <Tab label="Disponibilités" />
-                <Tab label="Avis" />
-                <Tab label="Photos" />
-              </Tabs>
+                {providerName?.[0]?.toUpperCase() || "P"}
+              </Avatar>
 
-              <Box sx={{ mt: 3 }}>
-                {activeTab === 0 && (
-                  <Fade in timeout={500}>
-                    <Box>
-                      <Typography variant="h6" gutterBottom>
-                        À propos
-                      </Typography>
-                      <Typography paragraph>{provider?.about}</Typography>
-                      <Typography variant="h6" gutterBottom>
-                        Expérience
-                      </Typography>
-                      <Typography paragraph>{provider?.experience}</Typography>
-                      <Typography variant="h6" gutterBottom>
-                        Formation
-                      </Typography>
-                      <Typography paragraph>{provider?.education}</Typography>
-                    </Box>
-                  </Fade>
-                )}
+              <Box sx={{ flexGrow: 1 }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
+                  <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                    {providerName}
+                  </Typography>
+                  <VerifiedIcon sx={{ color: "primary.main" }} />
+                </Stack>
 
-                {activeTab === 1 && (
-                  <Fade in timeout={500}>
-                    <Grid container spacing={2}>
-                      {provider?.services.map((service) => (
-                        <Grid item xs={12} sm={6} md={4} key={service.id}>
-                          <Card>
-                            <CardContent>
-                              <Typography variant="h6" gutterBottom>
-                                {service.name}
-                              </Typography>
-                              <Typography color="text.secondary" paragraph>
-                                {service.description}
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  <MoneyIcon sx={{ mr: 0.5, color: 'success.main' }} />
-                                  <Typography>{service.price}€</Typography>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  <TimeIcon sx={{ mr: 0.5, color: 'info.main' }} />
-                                  <Typography>{service.duration} min</Typography>
-                                </Box>
-                              </Box>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Fade>
-                )}
+                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Chip label={provider?.is_verified ? "Vérifié" : "Non vérifié"} color={provider?.is_verified ? "success" : "default"} />
+                  <Chip label={provider?.is_active ? "Disponible" : "Indisponible"} color={provider?.is_active ? "info" : "warning"} />
+                </Stack>
 
-                {activeTab === 2 && (
-                  <Fade in timeout={500}>
-                    <Box>
-                      <Typography variant="h6" gutterBottom>
-                        Disponibilités
-                      </Typography>
-                      <Grid container spacing={2}>
-                        {provider?.availability.map((slot) => (
-                          <Grid item xs={12} sm={6} md={4} key={slot.id}>
-                            <Card>
-                              <CardContent>
-                                <Typography variant="subtitle1" gutterBottom>
-                                  {format(parseISO(slot.date), 'EEEE d MMMM', {
-                                    locale: fr,
-                                  })}
-                                </Typography>
-                                <List>
-                                  {slot.times.map((time) => (
-                                    <ListItem key={time}>
-                                      <ListItemIcon>
-                                        <AccessTime />
-                                      </ListItemIcon>
-                                      <ListItemText
-                                        primary={format(parseISO(time), 'HH:mm', {
-                                          locale: fr,
-                                        })}
-                                      />
-                                    </ListItem>
-                                  ))}
-                                </List>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Box>
-                  </Fade>
-                )}
-
-                {activeTab === 3 && (
-                  <Fade in timeout={500}>
-                    <Box>
-                      <Typography variant="h6" gutterBottom>
-                        Avis clients
-                      </Typography>
-                      <List>
-                        {provider?.reviews.map((review) => (
-                          <ListItem key={review.id}>
-                            <ListItemAvatar>
-                              <Avatar src={review.client.profile_picture} />
-                            </ListItemAvatar>
-                            <ListItemText
-                              primary={
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="subtitle1">
-                                    {review.client.name}
-                                  </Typography>
-                                  <Rating value={review.rating} readOnly size="small" />
-                                </Box>
-                              }
-                              secondary={
-                                <>
-                                  <Typography
-                                    component="span"
-                                    variant="body2"
-                                    color="text.primary"
-                                  >
-                                    {review.comment}
-                                  </Typography>
-                                  <Typography variant="caption" display="block">
-                                    {format(parseISO(review.created_at), 'd MMMM yyyy', {
-                                      locale: fr,
-                                    })}
-                                  </Typography>
-                                </>
-                              }
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                      {user && (
-                        <Button
-                          variant="outlined"
-                          startIcon={<StarIcon />}
-                          onClick={() => setReviewDialog(true)}
-                        >
-                          Laisser un avis
-                        </Button>
-                      )}
-                    </Box>
-                  </Fade>
-                )}
-
-                {activeTab === 4 && (
-                  <Fade in timeout={500}>
-                    <Box>
-                      <Typography variant="h6" gutterBottom>
-                        Photos
-                      </Typography>
-                      <Grid container spacing={2}>
-                        {provider?.photos.map((photo) => (
-                          <Grid item xs={12} sm={6} md={4} key={photo.id}>
-                            <Card>
-                              <CardContent>
-                                <Box
-                                  component="img"
-                                  src={photo.url}
-                                  alt={photo.description}
-                                  sx={{
-                                    width: '100%',
-                                    height: 200,
-                                    objectFit: 'cover',
-                                    borderRadius: 1,
-                                  }}
-                                />
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                  {photo.description}
-                                </Typography>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Box>
-                  </Fade>
-                )}
+                <Typography color="text.secondary" sx={{ mt: 1 }}>
+                  {providerDescription}
+                </Typography>
               </Box>
-            </CardContent>
-          </Card>
+
+              <Button variant="contained" startIcon={<CalendarIcon />} onClick={openBooking}>
+                Prendre rendez-vous
+              </Button>
+            </Stack>
+          </Paper>
+        </Grid>
+
+        {/* Infos + dispos */}
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 2.4, borderRadius: 3.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.2 }}>
+              Informations
+            </Typography>
+            <Divider sx={{ mb: 1.6 }} />
+
+            <Stack spacing={1.1}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <PersonIcon sx={{ color: "primary.main" }} />
+                <Typography>{providerName}</Typography>
+              </Box>
+
+              {providerEmail && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography color="text.secondary">Email :</Typography>
+                  <Typography>{providerEmail}</Typography>
+                </Box>
+              )}
+
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Rating value={providerRating} readOnly precision={0.5} />
+                <Typography color="text.secondary">
+                  ({provider?.total_reviews || 0} avis)
+                </Typography>
+              </Box>
+
+              {providerRate ? (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <MoneyIcon sx={{ color: "primary.main" }} />
+                  <Typography>{providerRate} €/h</Typography>
+                </Box>
+              ) : null}
+            </Stack>
+          </Paper>
+
+          <Paper sx={{ p: 2.4, borderRadius: 3.5, mt: 2.2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.2 }}>
+              Disponibilités
+            </Typography>
+            <Divider sx={{ mb: 1.6 }} />
+
+            {availabilities.length === 0 ? (
+              <Alert severity="info">Aucune disponibilité renseignée pour le moment.</Alert>
+            ) : (
+              <Stack spacing={1}>
+                {availabilities.map((a) => (
+                  <Box
+                    key={a.id}
+                    sx={{
+                      p: 1.2,
+                      borderRadius: 2,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      bgcolor: alpha("#1f2430", 0.5),
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TimeIcon sx={{ color: "primary.main", fontSize: 18 }} />
+                      <Typography>
+                        {resolveDayLabel(a.day_of_week)} — {a.start_time?.slice?.(0, 5) || a.start_time} à{" "}
+                        {a.end_time?.slice?.(0, 5) || a.end_time}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Sidebar actions */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2.4, borderRadius: 3.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.2 }}>
+              Réserver rapidement
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 1.6 }}>
+              Lance la réservation en quelques clics depuis ce profil.
+            </Typography>
+
+            <Button fullWidth variant="contained" startIcon={<CalendarIcon />} onClick={openBooking}>
+              Prendre rendez-vous
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<LocationIcon />}
+              sx={{ mt: 1.2 }}
+              onClick={() => navigate("/search")}
+            >
+              Voir d’autres prestataires
+            </Button>
+          </Paper>
         </Grid>
       </Grid>
 
-      {/* Dialogues */}
-      <Dialog
-        open={bookingDialog}
-        onClose={() => setBookingDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Prendre rendez-vous</DialogTitle>
+      {/* Dialog réservation */}
+      <Dialog open={bookingDialog} onClose={closeBooking} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Réserver avec {providerName}</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+          <Stack spacing={1.4} sx={{ mt: 1 }}>
             <TextField
-              label="Date"
-              type="date"
-              value={bookingData.date}
-              onChange={(event) =>
-                setBookingData((prev) => ({ ...prev, date: event.target.value }))
-              }
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              label="Heure"
-              type="time"
-              value={bookingData.time}
-              onChange={(event) =>
-                setBookingData((prev) => ({ ...prev, time: event.target.value }))
-              }
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
+              fullWidth
               select
               label="Service"
               value={bookingData.service}
-              onChange={(event) =>
-                setBookingData((prev) => ({ ...prev, service: event.target.value }))
-              }
-              SelectProps={{
-                native: true,
-              }}
+              onChange={(e) => setBookingData((prev) => ({ ...prev, service: e.target.value }))}
             >
-              <option value="">Sélectionnez un service</option>
-              {provider?.services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name} - {service.price}€ ({service.duration} min)
-                </option>
+              {services.map((s) => (
+                <MenuItem key={s.id} value={String(s.id)}>
+                  {s.name}
+                </MenuItem>
               ))}
             </TextField>
-            <LocationSelector
-              value={bookingData.location}
-              onChange={(location) =>
-                setBookingData((prev) => ({ ...prev, location }))
-              }
-            />
-            <TextField
-              label="Notes"
-              multiline
-              rows={4}
-              value={bookingData.notes}
-              onChange={(event) =>
-                setBookingData((prev) => ({ ...prev, notes: event.target.value }))
-              }
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setBookingDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={handleBookingSubmit}
-            disabled={
-              !bookingData.date ||
-              !bookingData.time ||
-              !bookingData.service ||
-              !bookingData.location
-            }
-          >
-            Confirmer
-          </Button>
-        </DialogActions>
-      </Dialog>
 
-      <Dialog
-        open={reviewDialog}
-        onClose={() => setReviewDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Laisser un avis</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <Rating
-              value={review.rating}
-              onChange={(event, newValue) =>
-                setReview((prev) => ({ ...prev, rating: newValue }))
-              }
-              size="large"
-            />
-            <TextField
-              label="Commentaire"
-              multiline
-              rows={4}
-              value={review.comment}
-              onChange={(event) =>
-                setReview((prev) => ({ ...prev, comment: event.target.value }))
-              }
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReviewDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={handleReviewSubmit}
-            disabled={!review.rating || !review.comment}
-          >
-            Publier
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={reportDialog}
-        onClose={() => setReportDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Signaler un problème</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <TextField
-              select
-              label="Raison"
-              value={report.reason}
-              onChange={(event) =>
-                setReport((prev) => ({ ...prev, reason: event.target.value }))
-              }
-              SelectProps={{
-                native: true,
-              }}
-            >
-              <option value="">Sélectionnez une raison</option>
-              <option value="inappropriate">Contenu inapproprié</option>
-              <option value="spam">Spam</option>
-              <option value="fake">Profil faux</option>
-              <option value="other">Autre</option>
-            </TextField>
-            <TextField
-              label="Description"
-              multiline
-              rows={4}
-              value={report.description}
-              onChange={(event) =>
-                setReport((prev) => ({ ...prev, description: event.target.value }))
-              }
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReportDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={handleReportSubmit}
-            disabled={!report.reason || !report.description}
-          >
-            Envoyer
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={chatDialog}
-        onClose={() => setChatDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Chat avec {provider?.name}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ height: 400, overflowY: 'auto', mb: 2 }}>
-            {messages.map((msg) => (
-              <Box
-                key={msg.id}
-                sx={{
-                  display: 'flex',
-                  justifyContent: msg.is_sender ? 'flex-end' : 'flex-start',
-                  mb: 2,
-                }}
-              >
-                <Paper
-                  sx={{
-                    p: 2,
-                    maxWidth: '70%',
-                    bgcolor: msg.is_sender ? 'primary.light' : 'grey.100',
-                  }}
-                >
-                  <Typography>{msg.content}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {format(parseISO(msg.created_at), 'HH:mm', { locale: fr })}
-                  </Typography>
-                </Paper>
-              </Box>
-            ))}
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
               fullWidth
-              placeholder="Écrivez votre message..."
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
+              type="date"
+              label="Date"
+              InputLabelProps={{ shrink: true }}
+              value={bookingData.date}
+              onChange={(e) => setBookingData((prev) => ({ ...prev, date: e.target.value }))}
             />
-            <Button
-              variant="contained"
-              onClick={handleSendMessage}
-              disabled={!message.trim()}
-            >
-              Envoyer
-            </Button>
-          </Box>
-        </DialogContent>
-      </Dialog>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-      >
-        <Alert
-          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+            <TextField
+              fullWidth
+              type="time"
+              label="Heure"
+              InputLabelProps={{ shrink: true }}
+              value={bookingData.time}
+              onChange={(e) => setBookingData((prev) => ({ ...prev, time: e.target.value }))}
+            />
+
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              label="Notes (optionnel)"
+              placeholder="Précisions pour le prestataire..."
+              value={bookingData.notes}
+              onChange={(e) => setBookingData((prev) => ({ ...prev, notes: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeBooking}>Annuler</Button>
+          <Button variant="contained" onClick={handleBookingSubmit} disabled={bookingLoading}>
+            {bookingLoading ? "Réservation..." : "Confirmer"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
 
-export default ProviderDetail; 
+export default ProviderDetail;

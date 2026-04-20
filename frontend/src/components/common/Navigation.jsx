@@ -22,7 +22,9 @@ import {
   Typography,
   ListItemButton,
   Tooltip,
+  Chip,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 import {
   Menu as MenuIcon,
@@ -67,7 +69,6 @@ const Navigation = () => {
     if (!user?.profile_picture) return "";
     const src = String(user.profile_picture);
     if (src.startsWith("http://") || src.startsWith("https://")) return src;
-    // si DRF renvoie "/media/...."
     if (src.startsWith("/")) return `${API_URL}${src}`;
     return `${API_URL}/${src}`;
   }, [user, API_URL]);
@@ -94,9 +95,6 @@ const Navigation = () => {
     navigate(path);
   };
 
-  // ---------------------------
-  // Notifications (réel backend)
-  // ---------------------------
   const fetchNotifications = async () => {
     if (!user) return;
     try {
@@ -104,8 +102,7 @@ const Navigation = () => {
       const data = await notificationAPI.list();
       const list = Array.isArray(data) ? data : data?.results ?? [];
       setNotifications(list);
-    } catch (e) {
-      // silencieux (si endpoint pas prêt / token etc.)
+    } catch {
       setNotifications([]);
     } finally {
       setNotifLoading(false);
@@ -117,9 +114,10 @@ const Navigation = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => n && n.is_read === false).length;
-  }, [notifications]);
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => n && n.is_read === false).length,
+    [notifications]
+  );
 
   const openUserMenu = (e) => setAnchorUserMenu(e.currentTarget);
   const closeUserMenu = () => setAnchorUserMenu(null);
@@ -136,28 +134,43 @@ const Navigation = () => {
   const handleMarkRead = async (id) => {
     try {
       await notificationAPI.markRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-      );
-    } catch (e) {
-      // ignore
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    } catch {
+      // noop
     }
   };
 
+  const navButtonSx = (active) => ({
+    color: active ? "primary.main" : "text.primary",
+    borderRadius: 2.5,
+    px: 1.2,
+    py: 0.8,
+    minWidth: "auto",
+    fontWeight: 600,
+    backgroundColor: active ? alpha(theme.palette.primary.main, 0.14) : "transparent",
+    border: active ? `1px solid ${alpha(theme.palette.primary.main, 0.35)}` : "1px solid transparent",
+    "&:hover": {
+      backgroundColor: alpha(theme.palette.primary.main, 0.12),
+    },
+  });
+
   const drawer = (
-    <Box sx={{ width: 280 }}>
-      <Box sx={{ px: 2, py: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-          Nazek
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Gestion des rendez-vous
-        </Typography>
+    <Box sx={{ width: 290, height: "100%", bgcolor: "background.paper", p: 1.5 }}>
+      <Box sx={{ px: 1, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary" }}>
+            Nazek
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Premium services platform
+          </Typography>
+        </Box>
+        <Chip label="SaaS" size="small" color="primary" />
       </Box>
 
-      <Divider />
+      <Divider sx={{ borderColor: "divider", mb: 1.5 }} />
 
-      <List sx={{ px: 1 }}>
+      <List sx={{ px: 0.5 }}>
         {menuItems.map((item) => (
           <ListItemButton
             key={item.text}
@@ -166,14 +179,23 @@ const Navigation = () => {
               goTo(item.path, item.auth);
               if (isMobile) setMobileOpen(false);
             }}
-            sx={{ borderRadius: 2, mb: 0.5 }}
+            sx={{
+              borderRadius: 2,
+              mb: 0.6,
+              "&.Mui-selected": {
+                bgcolor: alpha(theme.palette.primary.main, 0.14),
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+              },
+            }}
           >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
+            <ListItemIcon sx={{ minWidth: 38, color: location.pathname === item.path ? "primary.main" : "text.secondary" }}>
+              {item.icon}
+            </ListItemIcon>
             <ListItemText primary={item.text} />
           </ListItemButton>
         ))}
 
-        <Divider sx={{ my: 1.5 }} />
+        <Divider sx={{ my: 1.4, borderColor: "divider" }} />
 
         {user ? (
           <>
@@ -182,9 +204,9 @@ const Navigation = () => {
                 goTo("/profile", true);
                 if (isMobile) setMobileOpen(false);
               }}
-              sx={{ borderRadius: 2, mb: 0.5 }}
+              sx={{ borderRadius: 2, mb: 0.6 }}
             >
-              <ListItemIcon sx={{ minWidth: 40 }}>
+              <ListItemIcon sx={{ minWidth: 38 }}>
                 <Avatar src={userAvatarSrc} sx={{ width: 26, height: 26 }}>
                   {userDisplayName?.[0]?.toUpperCase() || "U"}
                 </Avatar>
@@ -193,7 +215,7 @@ const Navigation = () => {
             </ListItemButton>
 
             <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2 }}>
-              <ListItemIcon sx={{ minWidth: 40 }}>
+              <ListItemIcon sx={{ minWidth: 38, color: "text.secondary" }}>
                 <LogoutIcon />
               </ListItemIcon>
               <ListItemText primary="Déconnexion" />
@@ -206,9 +228,9 @@ const Navigation = () => {
                 navigate("/login", { state: { from: location.pathname } });
                 if (isMobile) setMobileOpen(false);
               }}
-              sx={{ borderRadius: 2, mb: 0.5 }}
+              sx={{ borderRadius: 2, mb: 0.6 }}
             >
-              <ListItemIcon sx={{ minWidth: 40 }}>
+              <ListItemIcon sx={{ minWidth: 38, color: "text.secondary" }}>
                 <PersonIcon />
               </ListItemIcon>
               <ListItemText primary="Connexion" />
@@ -221,7 +243,7 @@ const Navigation = () => {
               }}
               sx={{ borderRadius: 2 }}
             >
-              <ListItemIcon sx={{ minWidth: 40 }}>
+              <ListItemIcon sx={{ minWidth: 38, color: "text.secondary" }}>
                 <PersonIcon />
               </ListItemIcon>
               <ListItemText primary="Inscription" />
@@ -234,42 +256,53 @@ const Navigation = () => {
 
   return (
     <>
-      <AppBar position="fixed" color="default" elevation={1}>
-        <Toolbar sx={{ gap: 1 }}>
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          bgcolor: alpha(theme.palette.background.paper, 0.82),
+          backdropFilter: "blur(14px)",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          boxShadow: "0 10px 20px rgba(0,0,0,.22)",
+        }}
+      >
+        <Toolbar sx={{ gap: 1, minHeight: 72 }}>
           {isMobile && (
-            <IconButton edge="start" onClick={handleDrawerToggle} aria-label="menu">
+            <IconButton edge="start" onClick={handleDrawerToggle} aria-label="menu" sx={{ color: "text.primary" }}>
               <MenuIcon />
             </IconButton>
           )}
 
-          {/* Brand */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexGrow: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, flexGrow: 1 }}>
             <Typography
               variant="h6"
-              sx={{ fontWeight: 900, cursor: "pointer" }}
+              sx={{ fontWeight: 900, cursor: "pointer", letterSpacing: "-0.02em" }}
               onClick={() => goTo("/")}
             >
               Nazek
             </Typography>
 
             {!isMobile && (
-              <Box sx={{ display: "flex", gap: 1 }}>
-                {menuItems.map((item) => (
-                  <Button
-                    key={item.text}
-                    startIcon={item.icon}
-                    onClick={() => goTo(item.path, item.auth)}
-                    color={location.pathname === item.path ? "primary" : "inherit"}
-                  >
-                    {item.text}
-                  </Button>
-                ))}
+              <Box sx={{ display: "flex", gap: 0.5 }}>
+                {menuItems.map((item) => {
+                  const active = location.pathname === item.path;
+                  return (
+                    <Button
+                      key={item.text}
+                      startIcon={item.icon}
+                      onClick={() => goTo(item.path, item.auth)}
+                      sx={navButtonSx(active)}
+                    >
+                      {item.text}
+                    </Button>
+                  );
+                })}
               </Box>
             )}
           </Box>
 
-          {/* Right actions */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
             {user && (
               <>
                 <Tooltip title="Notifications">
@@ -288,7 +321,16 @@ const Navigation = () => {
                   anchorEl={anchorNotifMenu}
                   open={Boolean(anchorNotifMenu)}
                   onClose={closeNotifMenu}
-                  PaperProps={{ sx: { width: 360, maxWidth: "90vw" } }}
+                  PaperProps={{
+                    sx: {
+                      width: 370,
+                      maxWidth: "92vw",
+                      bgcolor: "background.paper",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      mt: 1.2,
+                    },
+                  }}
                 >
                   <Box sx={{ px: 2, py: 1.5 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -303,17 +345,16 @@ const Navigation = () => {
                   {(notifications.slice(0, 6) || []).map((n) => (
                     <MenuItem
                       key={n.id}
-                      onClick={() => {
-                        if (n?.id) handleMarkRead(n.id);
-                      }}
+                      onClick={() => n?.id && handleMarkRead(n.id)}
                       sx={{
                         whiteSpace: "normal",
                         alignItems: "flex-start",
-                        opacity: n?.is_read ? 0.7 : 1,
+                        opacity: n?.is_read ? 0.68 : 1,
+                        py: 1.2,
                       }}
                     >
                       <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                           {n.title || "Notification"}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
@@ -348,7 +389,7 @@ const Navigation = () => {
               <>
                 <Tooltip title={userDisplayName}>
                   <IconButton onClick={openUserMenu} aria-label="user-menu">
-                    <Avatar src={userAvatarSrc}>
+                    <Avatar src={userAvatarSrc} sx={{ bgcolor: "secondary.main", color: "text.primary" }}>
                       {userDisplayName?.[0]?.toUpperCase() || "U"}
                     </Avatar>
                   </IconButton>
@@ -358,6 +399,14 @@ const Navigation = () => {
                   anchorEl={anchorUserMenu}
                   open={Boolean(anchorUserMenu)}
                   onClose={closeUserMenu}
+                  PaperProps={{
+                    sx: {
+                      bgcolor: "background.paper",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      mt: 1.2,
+                    },
+                  }}
                 >
                   <MenuItem
                     onClick={() => {
@@ -387,10 +436,8 @@ const Navigation = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Spacer pour compenser AppBar fixed */}
-      <Toolbar />
+      <Toolbar sx={{ minHeight: "72px !important" }} />
 
-      {/* Drawer mobile */}
       <Drawer
         variant="temporary"
         anchor="left"
@@ -399,7 +446,7 @@ const Navigation = () => {
         ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: "block", md: "none" },
-          "& .MuiDrawer-paper": { boxSizing: "border-box" },
+          "& .MuiDrawer-paper": { boxSizing: "border-box", width: 290 },
         }}
       >
         {drawer}

@@ -19,6 +19,7 @@ import {
   Divider,
   Stack,
   InputAdornment,
+  Chip,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -26,7 +27,9 @@ import {
   Star as StarIcon,
   Euro as EuroIcon,
   RestartAlt as ResetIcon,
+  Tune as TuneIcon,
 } from "@mui/icons-material";
+import { alpha } from "@mui/material/styles";
 
 import { getServices } from "../services/api";
 import ServiceCard from "../components/common/ServiceCard";
@@ -43,15 +46,8 @@ const Search = () => {
   const routerLocation = useLocation();
   const [searchParams] = useSearchParams();
 
-  // ✅ init depuis Home (location.state) OU URL params
-  const initialQuery =
-    routerLocation.state?.query ??
-    searchParams.get("q") ??
-    "";
-  const initialLocation =
-    routerLocation.state?.location ??
-    searchParams.get("location") ??
-    "";
+  const initialQuery = routerLocation.state?.query ?? searchParams.get("q") ?? "";
+  const initialLocation = routerLocation.state?.location ?? searchParams.get("location") ?? "";
 
   const [allServices, setAllServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,13 +72,11 @@ const Search = () => {
     }
   });
 
-  // ✅ Fetch UNE seule fois
   useEffect(() => {
     const fetchServices = async () => {
       try {
         setLoading(true);
         setError("");
-
         const data = await getServices();
         const list = Array.isArray(data) ? data : data?.results ?? [];
         setAllServices(list);
@@ -96,12 +90,9 @@ const Search = () => {
     fetchServices();
   }, []);
 
-  // ✅ Si l’utilisateur revient via back/forward et que l’URL change, on sync
   useEffect(() => {
     const q = searchParams.get("q") ?? "";
     const loc = searchParams.get("location") ?? "";
-
-    // On ne remplace pas si déjà identique
     setFilters((prev) => {
       if (prev.query === q && prev.location === loc) return prev;
       return { ...prev, query: q, location: loc };
@@ -130,14 +121,9 @@ const Search = () => {
   );
 
   const availableCategories = useMemo(() => {
-    // essaie de trouver une catégorie si elle existe côté backend
     const cats = new Set();
     allServices.forEach((s) => {
-      const c =
-        s?.category ||
-        s?.service_type ||
-        s?.type ||
-        "";
+      const c = s?.category || s?.service_type || s?.type || "";
       if (c) cats.add(String(c));
     });
     return Array.from(cats);
@@ -152,32 +138,27 @@ const Search = () => {
     const category = (filters.category || "").trim().toLowerCase();
 
     return allServices.filter((s) => {
-      // --- text query
       if (q) {
         const hay = `${s?.name ?? ""} ${s?.description ?? ""} ${s?.icon ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
-      // --- location (si ton backend n’a pas ce champ, ça n’exclut rien)
       if (loc) {
         const hayLoc = `${s?.location ?? ""} ${s?.city ?? ""} ${s?.address ?? ""}`.toLowerCase();
         if (hayLoc && !hayLoc.includes(loc)) return false;
       }
 
-      // --- category (si pas de champ catégorie, on ignore)
       if (category) {
         const c = `${s?.category ?? s?.service_type ?? s?.type ?? ""}`.toLowerCase();
         if (c && c !== category) return false;
       }
 
-      // --- price (uniquement si au moins un service a price)
       if (hasAnyPrice) {
         const price = safeNumber(s?.price, 0);
         if (minP !== null && price < minP) return false;
         if (maxP !== null && price > maxP) return false;
       }
 
-      // --- rating (uniquement si au moins un service a rating)
       if (hasAnyRating) {
         const r =
           safeNumber(s?.rating, NaN) ||
@@ -197,11 +178,8 @@ const Search = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-
     const q = encodeURIComponent(filters.query || "");
     const loc = encodeURIComponent(filters.location || "");
-
-    // ✅ URL propre + partageable
     navigate(`/search?q=${q}&location=${loc}`);
   };
 
@@ -224,22 +202,30 @@ const Search = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 8, mb: 8 }}>
-      {/* Header / Search bar */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+    <Container maxWidth="xl" sx={{ mt: 2, mb: 7 }}>
+      <Paper
+        sx={{
+          p: { xs: 2, md: 3 },
+          mb: 2.5,
+          borderRadius: 4,
+          background:
+            "radial-gradient(circle at 10% -30%, rgba(255,138,28,.18), transparent 40%), #171a21",
+        }}
+      >
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={2}
-          alignItems={{ xs: "stretch", md: "center" }}
+          alignItems={{ xs: "flex-start", md: "center" }}
           justifyContent="space-between"
           sx={{ mb: 2 }}
         >
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 900 }}>
-              Rechercher un service
+            <Chip icon={<TuneIcon />} label="Recherche intelligente" color="primary" sx={{ mb: 1 }} />
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              Explorer les services
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Tapez un mot-clé, appliquez des filtres, puis ouvrez un service pour réserver.
+              Filtrez, comparez et trouvez rapidement le bon prestataire.
             </Typography>
           </Box>
 
@@ -254,12 +240,11 @@ const Search = () => {
         </Stack>
 
         <form onSubmit={handleSearchSubmit}>
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={1.5} alignItems="center">
             <Grid item xs={12} md={5}>
               <TextField
                 fullWidth
-                variant="outlined"
-                placeholder="Que recherchez-vous ? (ex: ménage, réparation...)"
+                placeholder="Que recherchez-vous ? (ménage, plomberie, etc.)"
                 value={filters.query}
                 onChange={(e) => handleFilterChange("query", e.target.value)}
                 InputProps={{
@@ -275,7 +260,6 @@ const Search = () => {
             <Grid item xs={12} md={5}>
               <TextField
                 fullWidth
-                variant="outlined"
                 placeholder="Ville / Adresse (optionnel)"
                 value={filters.location}
                 onChange={(e) => handleFilterChange("location", e.target.value)}
@@ -290,7 +274,7 @@ const Search = () => {
             </Grid>
 
             <Grid item xs={12} md={2}>
-              <Button fullWidth variant="contained" type="submit" sx={{ height: "56px" }}>
+              <Button fullWidth variant="contained" type="submit" sx={{ height: 56 }}>
                 Rechercher
               </Button>
             </Grid>
@@ -298,28 +282,26 @@ const Search = () => {
         </form>
       </Paper>
 
-      <Grid container spacing={3}>
-        {/* Filters */}
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 3, borderRadius: 3 }} elevation={1}>
-            <Typography variant="h6" sx={{ fontWeight: 800 }} gutterBottom>
+      <Grid container spacing={2.5}>
+        <Grid item xs={12} md={3.2}>
+          <Paper sx={{ p: 2.2, borderRadius: 3.5, position: "sticky", top: 92 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
               Filtres
             </Typography>
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ my: 1.6 }} />
 
-            {/* Prix */}
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography gutterBottom sx={{ fontWeight: 700 }}>
                 Prix
               </Typography>
 
               {!hasAnyPrice ? (
-                <Alert severity="info" sx={{ mb: 1 }}>
-                  Le champ <b>price</b> n’est pas disponible dans ton backend (normal).
+                <Alert severity="info" sx={{ mb: 1.2 }}>
+                  Le champ <b>price</b> n’est pas disponible côté backend.
                 </Alert>
               ) : null}
 
-              <Grid container spacing={2}>
+              <Grid container spacing={1}>
                 <Grid item xs={6}>
                   <TextField
                     fullWidth
@@ -357,15 +339,14 @@ const Search = () => {
               </Grid>
             </Box>
 
-            {/* Note */}
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography gutterBottom sx={{ fontWeight: 700 }}>
                 Note minimum
               </Typography>
 
               {!hasAnyRating ? (
-                <Alert severity="info" sx={{ mb: 1 }}>
-                  Le champ <b>rating</b> n’est pas disponible dans ton backend (normal).
+                <Alert severity="info" sx={{ mb: 1.2 }}>
+                  Le champ <b>rating</b> n’est pas disponible côté backend.
                 </Alert>
               ) : null}
 
@@ -374,11 +355,10 @@ const Search = () => {
                 onChange={(_, value) => handleFilterChange("rating", value || 0)}
                 precision={0.5}
                 disabled={!hasAnyRating}
-                emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
+                emptyIcon={<StarIcon style={{ opacity: 0.5 }} fontSize="inherit" />}
               />
             </Box>
 
-            {/* Catégorie */}
             <Box>
               <Typography gutterBottom sx={{ fontWeight: 700 }}>
                 Catégorie
@@ -392,8 +372,6 @@ const Search = () => {
                   onChange={(e) => handleFilterChange("category", e.target.value)}
                 >
                   <MenuItem value="">Toutes</MenuItem>
-
-                  {/* ✅ si ton backend a des catégories -> on les affiche */}
                   {availableCategories.length > 0 ? (
                     availableCategories.map((c) => (
                       <MenuItem key={c} value={c}>
@@ -402,7 +380,6 @@ const Search = () => {
                     ))
                   ) : (
                     <>
-                      {/* fallback UI (non bloquant) */}
                       <MenuItem value="beauty">Beauté</MenuItem>
                       <MenuItem value="health">Santé</MenuItem>
                       <MenuItem value="education">Éducation</MenuItem>
@@ -416,26 +393,40 @@ const Search = () => {
           </Paper>
         </Grid>
 
-        {/* Results */}
-        <Grid item xs={12} md={9}>
-          <Paper elevation={0} sx={{ mb: 2, p: 2, borderRadius: 3, bgcolor: "grey.50" }}>
+        <Grid item xs={12} md={8.8}>
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 1.5,
+              p: 1.7,
+              borderRadius: 2.7,
+              bgcolor: alpha("#1f2430", 0.62),
+              border: "1px solid",
+              borderColor: "divider",
+            }}
+          >
             <Typography variant="body2" color="text.secondary">
-              Résultats : <b>{filteredServices.length}</b> service(s)
+              Résultats : <b style={{ color: "#f3f4f6" }}>{filteredServices.length}</b> service(s)
             </Typography>
           </Paper>
 
           {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
               <CircularProgress />
             </Box>
           ) : error ? (
             <Alert severity="error">{error}</Alert>
           ) : filteredServices.length === 0 ? (
-            <Alert severity="info">
-              Aucun service trouvé. Essayez de modifier la recherche ou les filtres.
-            </Alert>
+            <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+              <Typography variant="h6" sx={{ mb: 0.6 }}>
+                Aucun service trouvé
+              </Typography>
+              <Typography color="text.secondary">
+                Ajuste la recherche ou les filtres pour afficher des résultats.
+              </Typography>
+            </Paper>
           ) : (
-            <Grid container spacing={3}>
+            <Grid container spacing={2.2}>
               {filteredServices.map((service) => (
                 <Grid item xs={12} sm={6} key={service.id}>
                   <ServiceCard
