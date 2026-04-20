@@ -17,6 +17,7 @@ import {
   FavoriteBorder as FavoriteBorderIcon,
   Star as StarIcon,
   LocationOn as LocationIcon,
+  Image as ImageIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 
@@ -39,6 +40,8 @@ const ServiceCard = ({
     e.target.onerror = null;
     e.target.src = "/images/placeholder.jpg";
   };
+
+  const hasImage = Boolean(service?.image);
 
   return (
     <Fade in timeout={450}>
@@ -63,16 +66,44 @@ const ServiceCard = ({
         onClick={handleClick}
       >
         <Box sx={{ position: "relative" }}>
-          <CardMedia
-            component="img"
-            height={isMobile ? 150 : 185}
-            image={service.image || "/images/placeholder.jpg"}
-            alt={service.name}
-            onError={handleImageError}
-            sx={{
-              filter: "saturate(0.9) contrast(1.04)",
-            }}
-          />
+          {hasImage ? (
+            <CardMedia
+              component="img"
+              height={isMobile ? 150 : 185}
+              image={service.image || "/images/placeholder.jpg"}
+              alt={service.name}
+              onError={handleImageError}
+              sx={{ filter: "saturate(0.9) contrast(1.04)" }}
+            />
+          ) : (
+            <Box
+              sx={{
+                height: isMobile ? 150 : 185,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background:
+                  "radial-gradient(circle at 20% 0%, rgba(243,139,42,.20), transparent 35%), linear-gradient(180deg, #111827 0%, #0f172a 100%)",
+              }}
+            >
+              <Box
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: alpha(theme.palette.primary.main, 0.15),
+                  border: "1px solid",
+                  borderColor: alpha(theme.palette.primary.main, 0.35),
+                }}
+              >
+                <ImageIcon sx={{ color: "primary.main" }} />
+              </Box>
+            </Box>
+          )}
+
           <Box
             sx={{
               position: "absolute",
@@ -99,7 +130,7 @@ const ServiceCard = ({
               onFavoriteClick(service.id);
             }}
           >
-            {isFavorite ? <FavoriteIcon sx={{ color: "#ff8a1c" }} /> : <FavoriteBorderIcon />}
+            {isFavorite ? <FavoriteIcon sx={{ color: "#f38b2a" }} /> : <FavoriteBorderIcon />}
           </IconButton>
         </Box>
 
@@ -131,7 +162,7 @@ const ServiceCard = ({
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, mb: 1.1 }}>
             {showRating && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
-                <StarIcon sx={{ color: "#ff8a1c", fontSize: 18 }} />
+                <StarIcon sx={{ color: "#f38b2a", fontSize: 18 }} />
                 <Typography variant="body2" color="text.secondary">
                   {service.rating?.toFixed?.(1) || "N/A"}
                 </Typography>

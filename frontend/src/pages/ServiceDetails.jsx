@@ -38,6 +38,8 @@ import AppointmentCalendar from "../components/common/AppointmentCalendar";
 import { useAuth } from "../contexts/AuthContext";
 import { serviceAPI, employerAPI, appointmentAPI } from "../services/api";
 
+const FAVORITES_KEY = "favorites_services";
+
 const pad2 = (n) => String(n).padStart(2, "0");
 
 const normalizeDateTime = (value) => {
@@ -79,6 +81,16 @@ const normalizeDateTime = (value) => {
   }
 
   return { date: "", time: "" };
+};
+
+const readFavorites = () => {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 };
 
 const ServiceDetails = () => {
@@ -165,12 +177,28 @@ const ServiceDetails = () => {
     fetchAll();
   }, [id]);
 
+  useEffect(() => {
+    if (!service?.id) return;
+    const favorites = readFavorites();
+    setIsFavorite(favorites.map(String).includes(String(service.id)));
+  }, [service?.id]);
+
   const goLogin = () => {
     navigate("/login", { state: { from: location.pathname } });
   };
 
   const handleFavoriteClick = () => {
-    setIsFavorite((prev) => !prev);
+    if (!service?.id) return;
+
+    const favorites = readFavorites();
+    const exists = favorites.map(String).includes(String(service.id));
+
+    const next = exists
+      ? favorites.filter((favId) => String(favId) !== String(service.id))
+      : [...favorites, service.id];
+
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+    setIsFavorite(!exists);
   };
 
   const handleOpenCalendar = () => {
@@ -277,14 +305,13 @@ const ServiceDetails = () => {
       )}
 
       <Grid container spacing={2.2}>
-        {/* Main panel */}
         <Grid item xs={12} md={8}>
           <Paper
             sx={{
               p: { xs: 2, md: 3 },
               borderRadius: 4,
               background:
-                "radial-gradient(circle at 10% -30%, rgba(255,138,28,.14), transparent 38%), #171a21",
+                "radial-gradient(circle at 10% -30%, rgba(243,139,42,.14), transparent 38%), #171b22",
             }}
           >
             <Stack
@@ -344,12 +371,12 @@ const ServiceDetails = () => {
                 </Box>
               ) : null}
 
-              {service.price ? (
-                <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }}>
-                  <EuroIcon sx={{ color: "primary.main" }} />
-                  <Typography sx={{ fontWeight: 700 }}>{service.price}€</Typography>
-                </Box>
-              ) : null}
+              <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }}>
+                <EuroIcon sx={{ color: "primary.main" }} />
+                <Typography sx={{ fontWeight: 700 }}>
+                  {service.price ? `${service.price}€` : "Tarif sur demande"}
+                </Typography>
+              </Box>
             </Stack>
 
             <Divider sx={{ my: 2 }} />
@@ -371,12 +398,11 @@ const ServiceDetails = () => {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.2 }}>
                 Choisissez une date et une heure
               </Typography>
-              <AppointmentCalendar onSelectDateTime={handleSelectDateTime} />
+              <AppointmentCalendar onSelectDateTime={handleSelectDateTime} provider={selectedEmployer} />
             </Paper>
           )}
         </Grid>
 
-        {/* Right panel */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2.2, borderRadius: 3.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.2 }}>
@@ -408,7 +434,7 @@ const ServiceDetails = () => {
                   borderRadius: 2.5,
                   border: "1px solid",
                   borderColor: "divider",
-                  backgroundColor: alpha("#1f2430", 0.52),
+                  backgroundColor: alpha("#232935", 0.52),
                 }}
               >
                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>

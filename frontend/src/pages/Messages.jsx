@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Container,
   Typography,
@@ -14,10 +14,13 @@ import {
   Alert,
   Button,
   Stack,
+  Chip,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import SearchIcon from "@mui/icons-material/Search";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import MarkChatReadIcon from "@mui/icons-material/MarkChatRead";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -25,14 +28,24 @@ const Messages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [messages] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    // TODO: Implémenter la récupération des messages backend
-    setLoading(false);
+    // TODO backend: remplace ici par l'appel API réel
+    try {
+      setLoading(true);
+      setError("");
+      setMessages([]);
+    } catch (err) {
+      setError(err.message || "Impossible de charger les messages.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  const unreadCount = useMemo(() => messages.filter((m) => !m.is_read).length, [messages]);
 
   if (loading) {
     return (
@@ -57,15 +70,41 @@ const Messages = () => {
           p: { xs: 2, md: 3 },
           borderRadius: 4,
           mb: 2.2,
-          background:
-            "radial-gradient(circle at 10% -30%, rgba(255,138,28,.14), transparent 38%), #171a21",
+          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.14), transparent 38%), #171b22",
         }}
       >
-        <Typography variant="h4" sx={{ fontWeight: 800 }}>
-          Messages
-        </Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.6 }}>
-          Centralise tes échanges avec les prestataires dans un espace propre.
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1.2}
+          alignItems={{ xs: "flex-start", md: "center" }}
+          justifyContent="space-between"
+        >
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              Messages
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.6 }}>
+              Centralise tes échanges avec les prestataires dans un espace propre.
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1}>
+            <Chip
+              icon={<NotificationsActiveIcon />}
+              label={`${unreadCount} non lu(s)`}
+              color="primary"
+              sx={{ fontWeight: 700 }}
+            />
+            <Chip
+              icon={<MarkChatReadIcon />}
+              label={`${messages.length} conversation(s)`}
+              variant="outlined"
+            />
+          </Stack>
+        </Stack>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.2 }}>
+          Connecté : <b style={{ color: "#f2f4f8" }}>{user?.email || user?.username || "Utilisateur"}</b>
         </Typography>
       </Paper>
 
@@ -75,7 +114,7 @@ const Messages = () => {
             sx={{
               p: 5,
               textAlign: "center",
-              bgcolor: alpha("#1f2430", 0.52),
+              bgcolor: alpha("#232935", 0.52),
               border: "1px dashed",
               borderColor: "divider",
             }}
@@ -102,10 +141,10 @@ const Messages = () => {
               <React.Fragment key={message.id}>
                 <ListItem alignItems="flex-start" sx={{ py: 1.6 }}>
                   <ListItemAvatar>
-                    <Avatar alt={message.sender.name} src={message.sender.avatar} />
+                    <Avatar alt={message.sender?.name || "Utilisateur"} src={message.sender?.avatar} />
                   </ListItemAvatar>
                   <ListItemText
-                    primary={message.sender.name}
+                    primary={message.sender?.name || "Utilisateur"}
                     secondary={
                       <>
                         <Typography component="span" variant="body2" color="text.primary">
@@ -117,7 +156,7 @@ const Messages = () => {
                           color="text.secondary"
                           sx={{ display: "block", mt: 1 }}
                         >
-                          {new Date(message.created_at).toLocaleString()}
+                          {message.created_at ? new Date(message.created_at).toLocaleString() : "Date inconnue"}
                         </Typography>
                       </>
                     }

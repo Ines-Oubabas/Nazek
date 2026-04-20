@@ -16,6 +16,12 @@ class CriticalEndpointsTests(APITestCase):
             icon="fas fa-tools",
             is_active=True,
         )
+        self.other_service = Service.objects.create(
+            name="Ménage",
+            description="Service ménage test",
+            icon="fas fa-broom",
+            is_active=True,
+        )
 
         # Client user + profile
         self.client_user = User.objects.create_user(
@@ -101,3 +107,49 @@ class CriticalEndpointsTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.appointment.refresh_from_db()
         self.assertTrue(self.appointment.is_paid)
+
+    def test_create_appointment_autopicks_employer_when_service_is_name(self):
+        url = "/api/v1/appointments/create/"
+        payload = {
+            "service": "Plomberie",
+            "date": (timezone.now() + timedelta(days=2)).date().isoformat(),
+            "time": "10:30",
+            "description": "Intervention test",
+        }
+
+        res = self.client.post(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["employer"]["id"], self.employer_profile.id)
+        self.assertEqual(res.data["service"]["id"], self.service.id)
+
+    def test_create_appointment_autopicks_employer_when_service_is_id_string(self):
+        url = "/api/v1/appointments/create/"
+        payload = {
+            "service": str(self.service.id),
+            "date": (timezone.now() + timedelta(days=3)).date().isoformat(),
+            "time": "11:00",
+            "description": "Intervention test ID",
+        }
+
+        res = self.client.post(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["employer"]["id"], self.employer_profile.id)
+        self.assertEqual(res.data["service"]["id"], self.service.id)
+
+    def test_create_appointment_aligns_service_with_selected_employer(self):
+        url = "/api/v1/appointments/create/"
+        payload = {
+            "service": self.other_service.id,  # service différent du service employeur
+            "employer": self.employer_profile.id,
+            "date": (timezone.now() + timedelta(days=4)).date().isoformat(),
+            "time": "14:00",
+            "description": "Intervention avec service aligné",
+        }
+
+        res = self.client.post(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["employer"]["id"], self.employer_profile.id)
+        self.assertEqual(res.data["service"]["id"], self.service.id)

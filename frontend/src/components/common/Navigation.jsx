@@ -1,4 +1,3 @@
-// frontend/src/components/common/Navigation.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -97,6 +96,7 @@ const Navigation = () => {
 
   const fetchNotifications = async () => {
     if (!user) return;
+
     try {
       setNotifLoading(true);
       const data = await notificationAPI.list();
@@ -136,36 +136,46 @@ const Navigation = () => {
       await notificationAPI.markRead(id);
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
     } catch {
-      // noop
+      // no-op
     }
   };
 
   const navButtonSx = (active) => ({
-    color: active ? "primary.main" : "text.primary",
+    color: active ? "primary.light" : "text.primary",
     borderRadius: 2.5,
     px: 1.2,
     py: 0.8,
     minWidth: "auto",
-    fontWeight: 600,
+    fontWeight: 650,
+    whiteSpace: "nowrap",
     backgroundColor: active ? alpha(theme.palette.primary.main, 0.14) : "transparent",
-    border: active ? `1px solid ${alpha(theme.palette.primary.main, 0.35)}` : "1px solid transparent",
+    border: active ? `1px solid ${alpha(theme.palette.primary.main, 0.4)}` : "1px solid transparent",
     "&:hover": {
-      backgroundColor: alpha(theme.palette.primary.main, 0.12),
+      backgroundColor: alpha(theme.palette.primary.main, 0.1),
+      borderColor: active ? alpha(theme.palette.primary.main, 0.42) : alpha(theme.palette.primary.main, 0.2),
     },
   });
 
   const drawer = (
-    <Box sx={{ width: 290, height: "100%", bgcolor: "background.paper", p: 1.5 }}>
-      <Box sx={{ px: 1, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <Box sx={{ width: 300, height: "100%", bgcolor: "background.paper", p: 1.5 }}>
+      <Box
+        sx={{
+          px: 1,
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary" }}>
+          <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary", letterSpacing: "-0.02em" }}>
             Nazek
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Premium services platform
           </Typography>
         </Box>
-        <Chip label="SaaS" size="small" color="primary" />
+        <Chip label="Premium" size="small" color="primary" />
       </Box>
 
       <Divider sx={{ borderColor: "divider", mb: 1.5 }} />
@@ -181,14 +191,20 @@ const Navigation = () => {
             }}
             sx={{
               borderRadius: 2,
-              mb: 0.6,
+              mb: 0.7,
+              border: "1px solid transparent",
               "&.Mui-selected": {
                 bgcolor: alpha(theme.palette.primary.main, 0.14),
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
               },
             }}
           >
-            <ListItemIcon sx={{ minWidth: 38, color: location.pathname === item.path ? "primary.main" : "text.secondary" }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 38,
+                color: location.pathname === item.path ? "primary.light" : "text.secondary",
+              }}
+            >
               {item.icon}
             </ListItemIcon>
             <ListItemText primary={item.text} />
@@ -207,7 +223,7 @@ const Navigation = () => {
               sx={{ borderRadius: 2, mb: 0.6 }}
             >
               <ListItemIcon sx={{ minWidth: 38 }}>
-                <Avatar src={userAvatarSrc} sx={{ width: 26, height: 26 }}>
+                <Avatar src={userAvatarSrc} sx={{ width: 27, height: 27 }}>
                   {userDisplayName?.[0]?.toUpperCase() || "U"}
                 </Avatar>
               </ListItemIcon>
@@ -261,10 +277,10 @@ const Navigation = () => {
         elevation={0}
         sx={{
           bgcolor: alpha(theme.palette.background.paper, 0.82),
-          backdropFilter: "blur(14px)",
+          backdropFilter: "blur(16px)",
           borderBottom: "1px solid",
-          borderColor: "divider",
-          boxShadow: "0 10px 20px rgba(0,0,0,.22)",
+          borderColor: alpha(theme.palette.divider, 0.95),
+          boxShadow: "0 10px 26px rgba(0,0,0,.3)",
         }}
       >
         <Toolbar sx={{ gap: 1, minHeight: 72 }}>
@@ -274,17 +290,38 @@ const Navigation = () => {
             </IconButton>
           )}
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, flexGrow: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, flexGrow: 1, minWidth: 0 }}>
             <Typography
               variant="h6"
-              sx={{ fontWeight: 900, cursor: "pointer", letterSpacing: "-0.02em" }}
+              sx={{
+                fontWeight: 900,
+                cursor: "pointer",
+                letterSpacing: "-0.03em",
+                color: "text.primary",
+                whiteSpace: "nowrap",
+                mr: 0.4,
+              }}
               onClick={() => goTo("/")}
             >
               Nazek
             </Typography>
 
             {!isMobile && (
-              <Box sx={{ display: "flex", gap: 0.5 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 0.45,
+                  minWidth: 0,
+                  overflowX: "auto",
+                  py: 0.2,
+                  pr: 0.4,
+                  "&::-webkit-scrollbar": { height: 6 },
+                  "&::-webkit-scrollbar-thumb": {
+                    backgroundColor: alpha(theme.palette.divider, 0.9),
+                    borderRadius: 999,
+                  },
+                }}
+              >
                 {menuItems.map((item) => {
                   const active = location.pathname === item.path;
                   return (
@@ -302,7 +339,7 @@ const Navigation = () => {
             )}
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexShrink: 0 }}>
             {user && (
               <>
                 <Tooltip title="Notifications">
@@ -389,7 +426,15 @@ const Navigation = () => {
               <>
                 <Tooltip title={userDisplayName}>
                   <IconButton onClick={openUserMenu} aria-label="user-menu">
-                    <Avatar src={userAvatarSrc} sx={{ bgcolor: "secondary.main", color: "text.primary" }}>
+                    <Avatar
+                      src={userAvatarSrc}
+                      sx={{
+                        bgcolor: "secondary.main",
+                        color: "text.primary",
+                        border: "1px solid",
+                        borderColor: alpha(theme.palette.primary.main, 0.38),
+                      }}
+                    >
                       {userDisplayName?.[0]?.toUpperCase() || "U"}
                     </Avatar>
                   </IconButton>
@@ -446,7 +491,7 @@ const Navigation = () => {
         ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: "block", md: "none" },
-          "& .MuiDrawer-paper": { boxSizing: "border-box", width: 290 },
+          "& .MuiDrawer-paper": { boxSizing: "border-box", width: 300 },
         }}
       >
         {drawer}

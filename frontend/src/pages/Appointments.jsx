@@ -1,4 +1,3 @@
-// frontend/src/pages/Appointments.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Container,
@@ -25,6 +24,9 @@ import {
   CalendarToday as CalendarIcon,
   Autorenew as RefreshIcon,
   AddCircleOutline as AddIcon,
+  CheckCircle as CheckCircleIcon,
+  PendingActions as PendingActionsIcon,
+  EventNote as EventNoteIcon,
 } from "@mui/icons-material";
 
 import { appointmentAPI } from "../services/api";
@@ -104,8 +106,7 @@ const Appointments = () => {
           p: { xs: 2, md: 3 },
           borderRadius: 4,
           mb: 2.2,
-          background:
-            "radial-gradient(circle at 10% -30%, rgba(255,138,28,.16), transparent 38%), #171a21",
+          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.16), transparent 38%), #171b22",
         }}
       >
         <Stack
@@ -128,19 +129,10 @@ const Appointments = () => {
           </Box>
 
           <Stack direction="row" spacing={1}>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={fetchAppointments}
-              disabled={loading}
-            >
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchAppointments} disabled={loading}>
               Rafraîchir
             </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => navigate("/search")}
-            >
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate("/search")}>
               Réserver un service
             </Button>
           </Stack>
@@ -148,30 +140,41 @@ const Appointments = () => {
 
         <Grid container spacing={1.5}>
           <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 1.6, borderRadius: 2.5, bgcolor: alpha("#1f2430", 0.85) }}>
-              <Typography variant="caption" color="text.secondary">
-                Total
-              </Typography>
+            <Paper sx={{ p: 1.7, borderRadius: 2.5, bgcolor: alpha("#232935", 0.8) }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.4 }}>
+                <EventNoteIcon sx={{ color: "primary.main", fontSize: 20 }} />
+                <Typography variant="caption" color="text.secondary">
+                  Total
+                </Typography>
+              </Stack>
               <Typography variant="h5" sx={{ fontWeight: 800 }}>
                 {total}
               </Typography>
             </Paper>
           </Grid>
+
           <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 1.6, borderRadius: 2.5, bgcolor: alpha("#1f2430", 0.85) }}>
-              <Typography variant="caption" color="text.secondary">
-                Acceptés
-              </Typography>
+            <Paper sx={{ p: 1.7, borderRadius: 2.5, bgcolor: alpha("#232935", 0.8) }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.4 }}>
+                <CheckCircleIcon sx={{ color: "success.main", fontSize: 20 }} />
+                <Typography variant="caption" color="text.secondary">
+                  Acceptés
+                </Typography>
+              </Stack>
               <Typography variant="h5" sx={{ fontWeight: 800, color: "success.main" }}>
                 {accepted}
               </Typography>
             </Paper>
           </Grid>
+
           <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 1.6, borderRadius: 2.5, bgcolor: alpha("#1f2430", 0.85) }}>
-              <Typography variant="caption" color="text.secondary">
-                En attente
-              </Typography>
+            <Paper sx={{ p: 1.7, borderRadius: 2.5, bgcolor: alpha("#232935", 0.8) }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.4 }}>
+                <PendingActionsIcon sx={{ color: "warning.main", fontSize: 20 }} />
+                <Typography variant="caption" color="text.secondary">
+                  En attente
+                </Typography>
+              </Stack>
               <Typography variant="h5" sx={{ fontWeight: 800, color: "warning.main" }}>
                 {pending}
               </Typography>
@@ -193,7 +196,7 @@ const Appointments = () => {
               p: 4,
               borderRadius: 3,
               textAlign: "center",
-              backgroundColor: alpha("#1f2430", 0.45),
+              backgroundColor: alpha("#232935", 0.45),
               border: "1px dashed",
               borderColor: "divider",
             }}
@@ -207,49 +210,44 @@ const Appointments = () => {
             </Button>
           </Paper>
         ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Statut</TableCell>
-                <TableCell>Service</TableCell>
-                <TableCell>Prestataire</TableCell>
-              </TableRow>
-            </TableHead>
+          <Box sx={{ overflowX: "auto" }}>
+            <Table sx={{ minWidth: 720 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>Service</TableCell>
+                  <TableCell>Prestataire</TableCell>
+                </TableRow>
+              </TableHead>
 
-            <TableBody>
-              {appointments.map((a) => {
-                const statusLabel = a.status_display || a.status || "—";
-                return (
-                  <TableRow
-                    key={a.id}
-                    hover
-                    sx={{
-                      "&:hover": {
-                        bgcolor: alpha("#ff8a1c", 0.06),
-                      },
-                    }}
-                  >
-                    <TableCell>{a.id}</TableCell>
-                    <TableCell>{toDateLabel(a.date || a.datetime || a.start_time || a.created_at)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        color={statusColor(statusLabel)}
-                        label={statusLabel}
-                        sx={{ fontWeight: 700 }}
-                      />
-                    </TableCell>
-                    <TableCell>{a.service?.name || a.service_name || a.service || "—"}</TableCell>
-                    <TableCell>
-                      {a.employer?.name || a.employer?.user?.username || a.employer_name || "—"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+              <TableBody>
+                {appointments.map((a) => {
+                  const statusLabel = a.status_display || a.status || "—";
+                  return (
+                    <TableRow
+                      key={a.id}
+                      hover
+                      sx={{
+                        "&:hover": {
+                          bgcolor: alpha("#f38b2a", 0.06),
+                        },
+                      }}
+                    >
+                      <TableCell>{a.id}</TableCell>
+                      <TableCell>{toDateLabel(a.date || a.datetime || a.start_time || a.created_at)}</TableCell>
+                      <TableCell>
+                        <Chip size="small" color={statusColor(statusLabel)} label={statusLabel} sx={{ fontWeight: 700 }} />
+                      </TableCell>
+                      <TableCell>{a.service?.name || a.service_name || a.service || "—"}</TableCell>
+                      <TableCell>{a.employer?.name || a.employer?.user?.username || a.employer_name || "—"}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Box>
         )}
       </Paper>
     </Container>

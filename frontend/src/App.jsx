@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
@@ -22,33 +21,49 @@ import ServiceDetails from "./pages/ServiceDetails";
 
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
+const brand = {
+  orange: "#f38b2a",
+  orangeSoft: "#ffae57",
+  charcoal: "#111318",
+  charcoalSoft: "#171b22",
+  slate: "#232935",
+  border: "#2e3544",
+  text: "#f2f4f8",
+  muted: "#a9b1bf",
+};
+
 const theme = createTheme({
   palette: {
     mode: "dark",
-    primary: { main: "#ff8a1c", dark: "#e97711", light: "#ff9f40", contrastText: "#0f1115" },
-    secondary: { main: "#1f2430" },
+    primary: {
+      main: brand.orange,
+      dark: "#db7820",
+      light: brand.orangeSoft,
+      contrastText: "#121418",
+    },
+    secondary: { main: brand.slate },
     background: {
-      default: "#0f1115",
-      paper: "#171a21",
+      default: brand.charcoal,
+      paper: brand.charcoalSoft,
     },
     text: {
-      primary: "#f3f4f6",
-      secondary: "#a1a1aa",
+      primary: brand.text,
+      secondary: brand.muted,
     },
-    divider: "#2a3140",
-    success: { main: "#3fb950" },
-    info: { main: "#58a6ff" },
-    warning: { main: "#ffb347" },
-    error: { main: "#ff6b6b" },
+    divider: brand.border,
+    success: { main: "#46bc74" },
+    info: { main: "#56a9ff" },
+    warning: { main: "#ffbf69" },
+    error: { main: "#ff6f78" },
   },
   shape: {
     borderRadius: 14,
   },
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: { fontWeight: 800, letterSpacing: "-0.02em" },
-    h2: { fontWeight: 800, letterSpacing: "-0.02em" },
-    h3: { fontWeight: 800, letterSpacing: "-0.02em" },
+    h1: { fontWeight: 800, letterSpacing: "-0.03em" },
+    h2: { fontWeight: 800, letterSpacing: "-0.03em" },
+    h3: { fontWeight: 780, letterSpacing: "-0.02em" },
     h4: { fontWeight: 760, letterSpacing: "-0.02em" },
     h5: { fontWeight: 720 },
     h6: { fontWeight: 700 },
@@ -58,32 +73,36 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: "#0f1115",
+          backgroundColor: brand.charcoal,
           backgroundImage:
-            "radial-gradient(circle at 20% -10%, rgba(255,138,28,0.12), transparent 35%), radial-gradient(circle at 85% 20%, rgba(88,166,255,0.10), transparent 30%)",
+            "radial-gradient(circle at 8% -10%, rgba(243,139,42,0.2), transparent 32%), radial-gradient(circle at 90% 15%, rgba(86,169,255,0.09), transparent 26%), linear-gradient(180deg, #12161d 0%, #111318 100%)",
+        },
+        a: {
+          color: "inherit",
+          textDecoration: "none",
         },
         "*::-webkit-scrollbar": { width: "10px", height: "10px" },
         "*::-webkit-scrollbar-thumb": {
-          backgroundColor: "#2a3140",
+          backgroundColor: brand.border,
           borderRadius: "999px",
         },
-        "*::-webkit-scrollbar-track": { backgroundColor: "#0f1115" },
+        "*::-webkit-scrollbar-track": { backgroundColor: brand.charcoal },
       },
     },
     MuiPaper: {
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          border: "1px solid #2a3140",
-          boxShadow: "0 10px 40px rgba(0,0,0,.25)",
+          border: `1px solid ${brand.border}`,
+          boxShadow: "0 12px 34px rgba(0,0,0,.3)",
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          border: "1px solid #2a3140",
-          boxShadow: "0 10px 30px rgba(0,0,0,.24)",
+          border: `1px solid ${brand.border}`,
+          boxShadow: "0 12px 30px rgba(0,0,0,.26)",
         },
       },
     },
@@ -95,19 +114,19 @@ const theme = createTheme({
           paddingBlock: 9,
         },
         containedPrimary: {
-          background: "linear-gradient(135deg, #ff8a1c 0%, #ff9f40 100%)",
-          color: "#0f1115",
-          boxShadow: "0 8px 26px rgba(255,138,28,.35)",
+          background: `linear-gradient(135deg, ${brand.orange} 0%, ${brand.orangeSoft} 100%)`,
+          color: "#111318",
+          boxShadow: "0 10px 28px rgba(243,139,42,.35)",
           "&:hover": {
-            background: "linear-gradient(135deg, #ff9f40 0%, #ffb15f 100%)",
-            boxShadow: "0 10px 28px rgba(255,159,64,.4)",
+            background: "linear-gradient(135deg, #f79d49 0%, #ffbf79 100%)",
+            boxShadow: "0 12px 30px rgba(243,139,42,.42)",
           },
         },
         outlined: {
-          borderColor: "#2a3140",
+          borderColor: brand.border,
           "&:hover": {
-            borderColor: "#ff8a1c",
-            backgroundColor: alpha("#ff8a1c", 0.08),
+            borderColor: brand.orange,
+            backgroundColor: alpha(brand.orange, 0.08),
           },
         },
       },
@@ -120,27 +139,30 @@ const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          backgroundColor: "#171a21",
+          backgroundColor: "#181c25",
           borderRadius: 12,
-          "& .MuiOutlinedInput-notchedOutline": { borderColor: "#2a3140" },
-          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#ff8a1c" },
-          "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#ff8a1c", borderWidth: 1.5 },
+          "& .MuiOutlinedInput-notchedOutline": { borderColor: brand.border },
+          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: brand.orange },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+            borderColor: brand.orange,
+            borderWidth: 1.5,
+          },
         },
         input: {
-          color: "#f3f4f6",
-          "&::placeholder": { color: "#a1a1aa", opacity: 1 },
+          color: brand.text,
+          "&::placeholder": { color: brand.muted, opacity: 1 },
         },
       },
     },
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderBottom: "1px solid #2a3140",
+          borderBottom: `1px solid ${brand.border}`,
         },
         head: {
-          color: "#f3f4f6",
+          color: brand.text,
           fontWeight: 700,
-          backgroundColor: "#1f2430",
+          backgroundColor: alpha(brand.slate, 0.72),
         },
       },
     },
@@ -155,7 +177,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
-          border: "1px solid #2a3140",
+          border: `1px solid ${brand.border}`,
         },
       },
     },
@@ -169,6 +191,7 @@ const RequireAuth = ({ children }) => {
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
+
   return children;
 };
 

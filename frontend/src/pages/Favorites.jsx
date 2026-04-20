@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Container,
   Typography,
@@ -9,26 +9,66 @@ import {
   Paper,
   Button,
   Stack,
+  Chip,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import FavoriteIcon from "@mui/icons-material/Favorite";
 import SearchIcon from "@mui/icons-material/Search";
 import ServiceCard from "../components/common/ServiceCard";
-import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { getServices } from "../services/api";
+
+const FAVORITES_KEY = "favorites_services";
 
 const Favorites = () => {
-  const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [favorites, setFavorites] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(FAVORITES_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    // TODO: Implémenter la récupération des favoris backend
-    setLoading(false);
+    const fetchServices = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await getServices();
+        const list = Array.isArray(data) ? data : data?.results ?? [];
+        setServices(list);
+      } catch (err) {
+        setError(err.message || "Impossible de charger les favoris.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchServices();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteIds));
+  }, [favoriteIds]);
+
+  const favorites = useMemo(() => {
+    const idSet = new Set(favoriteIds.map((id) => String(id)));
+    return services.filter((s) => idSet.has(String(s.id)));
+  }, [services, favoriteIds]);
+
+  const removeFavorite = (serviceId) => {
+    setFavoriteIds((prev) => prev.filter((id) => String(id) !== String(serviceId)));
+  };
 
   if (loading) {
     return (
@@ -53,16 +93,31 @@ const Favorites = () => {
           p: { xs: 2, md: 3 },
           borderRadius: 4,
           mb: 2.2,
-          background:
-            "radial-gradient(circle at 10% -30%, rgba(255,138,28,.14), transparent 38%), #171a21",
+          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.14), transparent 38%), #171b22",
         }}
       >
-        <Typography variant="h4" sx={{ fontWeight: 800 }}>
-          Mes favoris
-        </Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.6 }}>
-          Retrouve rapidement les services que tu as sauvegardés.
-        </Typography>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={1.2}
+        >
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              Mes favoris
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.6 }}>
+              Retrouve rapidement les services que tu as sauvegardés.
+            </Typography>
+          </Box>
+
+          <Chip
+            icon={<FavoriteIcon />}
+            label={`${favorites.length} favori(s)`}
+            color="primary"
+            sx={{ fontWeight: 700 }}
+          />
+        </Stack>
       </Paper>
 
       {favorites.length === 0 ? (
@@ -71,7 +126,7 @@ const Favorites = () => {
             p: 5,
             textAlign: "center",
             borderRadius: 3.5,
-            bgcolor: alpha("#1f2430", 0.52),
+            bgcolor: alpha("#232935", 0.52),
             border: "1px dashed",
             borderColor: "divider",
           }}
@@ -99,9 +154,7 @@ const Favorites = () => {
               <ServiceCard
                 service={service}
                 isFavorite
-                onFavoriteClick={() => {
-                  // TODO: Implémenter la suppression des favoris backend
-                }}
+                onFavoriteClick={() => removeFavorite(service.id)}
               />
             </Grid>
           ))}

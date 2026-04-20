@@ -1,4 +1,3 @@
-// frontend/src/pages/Search.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
@@ -28,6 +27,9 @@ import {
   Euro as EuroIcon,
   RestartAlt as ResetIcon,
   Tune as TuneIcon,
+  Home as HomeIcon,
+  FilterAlt as FilterAltIcon,
+  InfoOutlined as InfoOutlinedIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 
@@ -112,10 +114,7 @@ const Search = () => {
   const hasAnyRating = useMemo(
     () =>
       allServices.some(
-        (s) =>
-          s?.rating !== undefined ||
-          s?.average_rating !== undefined ||
-          s?.avg_rating !== undefined
+        (s) => s?.rating !== undefined || s?.average_rating !== undefined || s?.avg_rating !== undefined
       ),
     [allServices]
   );
@@ -161,10 +160,7 @@ const Search = () => {
 
       if (hasAnyRating) {
         const r =
-          safeNumber(s?.rating, NaN) ||
-          safeNumber(s?.average_rating, NaN) ||
-          safeNumber(s?.avg_rating, NaN) ||
-          0;
+          safeNumber(s?.rating, NaN) || safeNumber(s?.average_rating, NaN) || safeNumber(s?.avg_rating, NaN) || 0;
         if (minRating > 0 && r < minRating) return false;
       }
 
@@ -201,6 +197,28 @@ const Search = () => {
     );
   };
 
+  const DataHint = ({ text }) => (
+    <Box
+      sx={{
+        mb: 1.1,
+        px: 1,
+        py: 0.7,
+        borderRadius: 1.6,
+        border: "1px solid",
+        borderColor: alpha("#56a9ff", 0.35),
+        bgcolor: alpha("#56a9ff", 0.08),
+        display: "flex",
+        alignItems: "center",
+        gap: 0.8,
+      }}
+    >
+      <InfoOutlinedIcon sx={{ fontSize: 18, color: "info.main" }} />
+      <Typography variant="caption" sx={{ color: "text.secondary", lineHeight: 1.35 }}>
+        {text}
+      </Typography>
+    </Box>
+  );
+
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 7 }}>
       <Paper
@@ -208,8 +226,7 @@ const Search = () => {
           p: { xs: 2, md: 3 },
           mb: 2.5,
           borderRadius: 4,
-          background:
-            "radial-gradient(circle at 10% -30%, rgba(255,138,28,.18), transparent 40%), #171a21",
+          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.18), transparent 40%), #171b22",
         }}
       >
         <Stack
@@ -233,7 +250,7 @@ const Search = () => {
             <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleReset}>
               Réinitialiser
             </Button>
-            <Button variant="contained" onClick={() => navigate("/")}>
+            <Button variant="contained" startIcon={<HomeIcon />} onClick={() => navigate("/")}>
               Accueil
             </Button>
           </Stack>
@@ -285,9 +302,12 @@ const Search = () => {
       <Grid container spacing={2.5}>
         <Grid item xs={12} md={3.2}>
           <Paper sx={{ p: 2.2, borderRadius: 3.5, position: "sticky", top: 92 }}>
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              Filtres
-            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <FilterAltIcon sx={{ color: "primary.main" }} />
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Filtres
+              </Typography>
+            </Stack>
             <Divider sx={{ my: 1.6 }} />
 
             <Box sx={{ mb: 2.5 }}>
@@ -296,9 +316,7 @@ const Search = () => {
               </Typography>
 
               {!hasAnyPrice ? (
-                <Alert severity="info" sx={{ mb: 1.2 }}>
-                  Le champ <b>price</b> n’est pas disponible côté backend.
-                </Alert>
+                <DataHint text="Le champ price n’est pas disponible côté backend." />
               ) : null}
 
               <Grid container spacing={1}>
@@ -345,9 +363,7 @@ const Search = () => {
               </Typography>
 
               {!hasAnyRating ? (
-                <Alert severity="info" sx={{ mb: 1.2 }}>
-                  Le champ <b>rating</b> n’est pas disponible côté backend.
-                </Alert>
+                <DataHint text="Le champ rating n’est pas disponible côté backend." />
               ) : null}
 
               <Rating
@@ -355,7 +371,7 @@ const Search = () => {
                 onChange={(_, value) => handleFilterChange("rating", value || 0)}
                 precision={0.5}
                 disabled={!hasAnyRating}
-                emptyIcon={<StarIcon style={{ opacity: 0.5 }} fontSize="inherit" />}
+                emptyIcon={<StarIcon style={{ opacity: 0.45 }} fontSize="inherit" />}
               />
             </Box>
 
@@ -400,14 +416,19 @@ const Search = () => {
               mb: 1.5,
               p: 1.7,
               borderRadius: 2.7,
-              bgcolor: alpha("#1f2430", 0.62),
+              bgcolor: alpha("#232935", 0.6),
               border: "1px solid",
               borderColor: "divider",
             }}
           >
-            <Typography variant="body2" color="text.secondary">
-              Résultats : <b style={{ color: "#f3f4f6" }}>{filteredServices.length}</b> service(s)
-            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
+              <Typography variant="body2" color="text.secondary">
+                Résultats : <b style={{ color: "#f2f4f8" }}>{filteredServices.length}</b> service(s)
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Favoris : <b style={{ color: "#f2f4f8" }}>{favorites.length}</b>
+              </Typography>
+            </Stack>
           </Paper>
 
           {loading ? (
@@ -433,7 +454,6 @@ const Search = () => {
                     service={service}
                     isFavorite={favorites.includes(service.id)}
                     onFavoriteClick={() => toggleFavorite(service.id)}
-                    onClick={() => navigate(`/services/${service.id}`)}
                   />
                 </Grid>
               ))}

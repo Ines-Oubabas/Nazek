@@ -1,7 +1,7 @@
-from rest_framework import serializers
 from django.utils import timezone
+from rest_framework import serializers
 
-from .models import Appointment, Client, Employer, Service, Availability, Notification, User
+from .models import Appointment, Availability, Client, Employer, Notification, Service, User
 
 
 class ServiceSerializer(serializers.ModelSerializer):
@@ -14,6 +14,15 @@ class AvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Availability
         fields = "__all__"
+
+    def validate(self, attrs):
+        start_time = attrs.get("start_time")
+        end_time = attrs.get("end_time")
+        if start_time and end_time and start_time >= end_time:
+            raise serializers.ValidationError(
+                {"end_time": "L'heure de fin doit être après l'heure de début."}
+            )
+        return attrs
 
 
 class ClientSerializer(serializers.ModelSerializer):
@@ -39,7 +48,15 @@ class EmployerSerializer(serializers.ModelSerializer):
 class EmployerUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employer
-        fields = ["name", "email", "phone", "service"]
+        fields = [
+            "name",
+            "email",
+            "phone",
+            "service",
+            "description",
+            "hourly_rate",
+            "profile_picture",
+        ]
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -48,7 +65,6 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-# ✅ Lecture (GET) : nested
 class AppointmentSerializer(serializers.ModelSerializer):
     client = ClientSerializer(read_only=True)
     employer = EmployerSerializer(read_only=True)
@@ -61,11 +77,10 @@ class AppointmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-# ✅ Création (POST) : IDs
 class AppointmentCreateSerializer(serializers.ModelSerializer):
     client = serializers.PrimaryKeyRelatedField(read_only=True)
-    service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all())
-    employer = serializers.PrimaryKeyRelatedField(queryset=Employer.objects.all())
+    service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True))
+    employer = serializers.PrimaryKeyRelatedField(queryset=Employer.objects.filter(is_active=True))
 
     class Meta:
         model = Appointment
@@ -84,9 +99,19 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"date": "La date du rendez-vous doit être dans le futur."})
 
         employer = attrs.get("employer")
-        if employer and hasattr(employer, "is_available"):
-            if not employer.is_available(dt):
-                raise serializers.ValidationError("L'employeur n'est pas disponible à cette date.")
+        service = attrs.get("service")
+
+        # Tolérance UX: si le front envoie un service qui ne correspond pas
+        # à l'employeur choisi, on aligne automatiquement sur le service réel
+        # de l'employeur pour éviter une boucle d'erreurs 400 côté UI.
+        if employer and employer.service_id:
+            if service is None or employer.service_id != service.id:
+                attrs["service"] = employer.service
+
+        if employer and hasattr(employer, "is_available") and not employer.is_available(dt):
+            raise serializers.ValidationError(
+                {"date": "L'employeur n'est pas disponible à cette date."}
+            )
 
         return attrs
 
@@ -137,3 +162,12 @@ class UserSerializer(serializers.ModelSerializer):
             user.set_password(password)
         user.save()
         return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance

@@ -1,7 +1,6 @@
 # appointments/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.html import format_html
 
 from .models import Client, Employer, Service, Appointment, Availability, Notification, User
 
@@ -109,6 +108,7 @@ class EmployerAdmin(admin.ModelAdmin):
     autocomplete_fields = ("user", "service")
     inlines = [AvailabilityInline]
     list_per_page = 25
+    actions = ["activate_employers", "deactivate_employers", "verify_employers", "unverify_employers"]
 
     @admin.display(description="Note moyenne", ordering="average_rating")
     def avg_rating(self, obj):
@@ -121,6 +121,22 @@ class EmployerAdmin(admin.ModelAdmin):
         val = getattr(obj, "total_reviews", None)
         return "-" if val is None else int(val)
 
+    @admin.action(description="Activer les prestataires sélectionnés")
+    def activate_employers(self, request, queryset):
+        queryset.update(is_active=True)
+
+    @admin.action(description="Désactiver les prestataires sélectionnés")
+    def deactivate_employers(self, request, queryset):
+        queryset.update(is_active=False)
+
+    @admin.action(description="Vérifier les prestataires sélectionnés")
+    def verify_employers(self, request, queryset):
+        queryset.update(is_verified=True)
+
+    @admin.action(description="Retirer la vérification")
+    def unverify_employers(self, request, queryset):
+        queryset.update(is_verified=False)
+
 
 # ----------------------------
 # 🛠️ SERVICE
@@ -131,6 +147,15 @@ class ServiceAdmin(admin.ModelAdmin):
     search_fields = ("name",)
     list_filter = ("is_active",)
     list_per_page = 25
+    actions = ["activate_services", "deactivate_services"]
+
+    @admin.action(description="Activer les services sélectionnés")
+    def activate_services(self, request, queryset):
+        queryset.update(is_active=True)
+
+    @admin.action(description="Désactiver les services sélectionnés")
+    def deactivate_services(self, request, queryset):
+        queryset.update(is_active=False)
 
 
 # ----------------------------
@@ -164,7 +189,7 @@ class AppointmentAdmin(admin.ModelAdmin):
     autocomplete_fields = ("client", "employer", "service")
     list_per_page = 25
 
-    actions = ["mark_paid", "mark_unpaid"]
+    actions = ["mark_paid", "mark_unpaid", "mark_accepted", "mark_refused", "mark_completed"]
 
     @admin.action(description="Marquer comme payé")
     def mark_paid(self, request, queryset):
@@ -173,6 +198,18 @@ class AppointmentAdmin(admin.ModelAdmin):
     @admin.action(description="Marquer comme non payé")
     def mark_unpaid(self, request, queryset):
         queryset.update(is_paid=False)
+
+    @admin.action(description="Marquer comme accepté")
+    def mark_accepted(self, request, queryset):
+        queryset.update(status="accepté")
+
+    @admin.action(description="Marquer comme refusé")
+    def mark_refused(self, request, queryset):
+        queryset.update(status="refusé")
+
+    @admin.action(description="Marquer comme terminé")
+    def mark_completed(self, request, queryset):
+        queryset.update(status="terminé")
 
 
 # ----------------------------

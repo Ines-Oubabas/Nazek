@@ -17,6 +17,7 @@ import { alpha } from "@mui/material/styles";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 
 import { useAuth } from "../contexts/AuthContext";
 import { apiRequest, AUTH_URLS, CHANGE_PASSWORD_URL } from "../services/api";
@@ -113,8 +114,6 @@ const Profile = () => {
   };
 
   const handleDeleteAccount = async () => {
-    // Endpoint de suppression compte non garanti côté backend actuel.
-    // On garde un comportement non destructif.
     setError(
       "Suppression de compte non disponible actuellement côté backend. Contacte le support pour cette action."
     );
@@ -127,8 +126,7 @@ const Profile = () => {
           p: { xs: 2, md: 3 },
           borderRadius: 4,
           mb: 2.2,
-          background:
-            "radial-gradient(circle at 10% -30%, rgba(255,138,28,.14), transparent 38%), #171a21",
+          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.14), transparent 38%), #171b22",
         }}
       >
         <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "flex-start", md: "center" }}>
@@ -136,7 +134,7 @@ const Profile = () => {
             sx={{
               width: 78,
               height: 78,
-              bgcolor: alpha("#ff8a1c", 0.2),
+              bgcolor: alpha("#f38b2a", 0.2),
               color: "primary.main",
               border: "1px solid",
               borderColor: "divider",
@@ -153,6 +151,10 @@ const Profile = () => {
             </Typography>
             <Typography color="text.secondary">{formData.email || "—"}</Typography>
           </Box>
+
+          <Stack direction="row" spacing={1} sx={{ ml: { md: "auto" } }}>
+            <Chip icon={<VerifiedUserIcon />} label="Compte vérifié" variant="outlined" />
+          </Stack>
         </Stack>
       </Paper>
 
@@ -201,14 +203,7 @@ const Profile = () => {
                 </Grid>
 
                 <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Email"
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    disabled
-                  />
+                  <TextField fullWidth label="Email" type="email" name="email" value={formData.email} disabled />
                 </Grid>
 
                 <Grid item xs={12}>
@@ -281,7 +276,7 @@ const Profile = () => {
                 borderRadius: 2,
                 border: "1px dashed",
                 borderColor: "divider",
-                bgcolor: alpha("#ff6b6b", 0.06),
+                bgcolor: alpha("#ff6f78", 0.06),
               }}
             >
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>

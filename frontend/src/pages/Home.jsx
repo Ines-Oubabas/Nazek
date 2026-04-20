@@ -1,4 +1,3 @@
-// frontend/src/pages/Home.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,6 +25,7 @@ import {
   Security as SecurityIcon,
   CalendarToday as CalendarIcon,
   AutoAwesome as AutoAwesomeIcon,
+  CheckCircle as CheckCircleIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 
@@ -57,6 +57,15 @@ const Home = () => {
   });
 
   const popularServices = useMemo(() => services.slice(0, 6), [services]);
+
+  const heroStats = useMemo(
+    () => [
+      { label: "Services disponibles", value: services.length },
+      { label: "Favoris sauvegardés", value: favorites.length },
+      { label: "Expérience", value: "Premium" },
+    ],
+    [services.length, favorites.length]
+  );
 
   useEffect(() => {
     fetchServices();
@@ -131,7 +140,6 @@ const Home = () => {
 
   return (
     <Box>
-      {/* HERO */}
       <Box
         sx={{
           position: "relative",
@@ -140,11 +148,11 @@ const Home = () => {
           borderBottom: "1px solid",
           borderColor: "divider",
           background:
-            "radial-gradient(circle at 10% 0%, rgba(255,138,28,.22) 0%, transparent 35%), radial-gradient(circle at 80% 20%, rgba(88,166,255,.16) 0%, transparent 32%), linear-gradient(180deg, #12161f 0%, #0f1115 100%)",
+            "radial-gradient(circle at 10% 0%, rgba(243,139,42,.24) 0%, transparent 35%), radial-gradient(circle at 82% 16%, rgba(86,169,255,.14) 0%, transparent 30%), linear-gradient(180deg, #12161f 0%, #111318 100%)",
         }}
       >
         <Container maxWidth="lg">
-          <Grid container spacing={4.5} alignItems="center">
+          <Grid container spacing={4.2} alignItems="center">
             <Grid item xs={12} md={7}>
               <Chip
                 icon={<AutoAwesomeIcon />}
@@ -158,38 +166,29 @@ const Home = () => {
                 component="h1"
                 sx={{
                   fontSize: { xs: "2rem", md: "3rem" },
-                  lineHeight: 1.1,
+                  lineHeight: 1.08,
                   mb: 1.6,
+                  letterSpacing: "-0.03em",
                 }}
               >
-                Réservez vos services avec une expérience{" "}
+                Réservez vos services avec un rendu{" "}
                 <Box component="span" sx={{ color: "primary.main" }}>
                   moderne
                 </Box>{" "}
-                et fluide.
+                et haut de gamme.
               </Typography>
 
-              <Typography variant="h6" color="text.secondary" sx={{ mb: 3.2, maxWidth: 720 }}>
-                Une interface claire pour trouver le bon prestataire, réserver rapidement et suivre
-                vos rendez-vous dans un espace professionnel.
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 3.1, maxWidth: 760 }}>
+                Trouvez rapidement le bon prestataire, comparez les offres et suivez vos rendez-vous
+                dans un espace clair, premium et cohérent.
               </Typography>
 
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.4} sx={{ mb: 3 }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={goSearch}
-                  endIcon={<ArrowForwardIcon />}
-                >
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.4} sx={{ mb: 2.5 }}>
+                <Button variant="contained" size="large" onClick={goSearch} endIcon={<ArrowForwardIcon />}>
                   Réserver un service
                 </Button>
 
-                <Button
-                  variant="outlined"
-                  size="large"
-                  onClick={goAppointments}
-                  startIcon={<CalendarIcon />}
-                >
+                <Button variant="outlined" size="large" onClick={goAppointments} startIcon={<CalendarIcon />}>
                   Mes rendez-vous
                 </Button>
 
@@ -205,7 +204,7 @@ const Home = () => {
                 sx={{
                   p: { xs: 1.6, md: 2.1 },
                   borderRadius: 3,
-                  background: alpha("#171a21", 0.92),
+                  background: alpha("#171b22", 0.9),
                   border: "1px solid",
                   borderColor: "divider",
                 }}
@@ -263,17 +262,32 @@ const Home = () => {
                 <Chip
                   icon={<StarIcon />}
                   label="Qualité"
-                  sx={{ bgcolor: alpha("#ff8a1c", 0.14), color: "text.primary", border: "1px solid #2a3140" }}
+                  sx={{
+                    bgcolor: alpha("#f38b2a", 0.14),
+                    color: "text.primary",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
                 />
                 <Chip
                   icon={<SecurityIcon />}
                   label="Sécurisé"
-                  sx={{ bgcolor: alpha("#58a6ff", 0.12), color: "text.primary", border: "1px solid #2a3140" }}
+                  sx={{
+                    bgcolor: alpha("#56a9ff", 0.12),
+                    color: "text.primary",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
                 />
                 <Chip
                   icon={<ScheduleIcon />}
                   label="Rapide"
-                  sx={{ bgcolor: alpha("#3fb950", 0.12), color: "text.primary", border: "1px solid #2a3140" }}
+                  sx={{
+                    bgcolor: alpha("#46bc74", 0.12),
+                    color: "text.primary",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
                 />
               </Stack>
             </Grid>
@@ -284,7 +298,7 @@ const Home = () => {
                 sx={{
                   p: 3,
                   borderRadius: 4,
-                  background: alpha("#171a21", 0.92),
+                  background: alpha("#171b22", 0.9),
                   border: "1px solid",
                   borderColor: "divider",
                 }}
@@ -294,35 +308,47 @@ const Home = () => {
                 </Typography>
                 <Divider sx={{ borderColor: "divider", mb: 2 }} />
 
-                <Stack spacing={1.4}>
-                  <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+                <Stack spacing={1.35} sx={{ mb: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
                     <PeopleIcon sx={{ color: "primary.main" }} />
                     <Typography>Espaces client et prestataire unifiés</Typography>
                   </Box>
 
-                  <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+                  <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
                     <CalendarIcon sx={{ color: "primary.main" }} />
                     <Typography>Réservation simple par créneaux</Typography>
                   </Box>
 
-                  <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+                  <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
                     <SecurityIcon sx={{ color: "primary.main" }} />
                     <Typography>Authentification & notifications</Typography>
                   </Box>
-
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Connecté : <b style={{ color: "#f3f4f6" }}>{user ? user.email || user.username : "Non"}</b>
-                    </Typography>
-                  </Box>
                 </Stack>
+
+                <Grid container spacing={1}>
+                  {heroStats.map((item) => (
+                    <Grid item xs={4} key={item.label}>
+                      <Paper sx={{ p: 1.2, borderRadius: 2.2, bgcolor: alpha("#232935", 0.7) }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.label}
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                          {item.value}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.6 }}>
+                  Connecté : <b style={{ color: "#f2f4f8" }}>{user ? user.email || user.username : "Non"}</b>
+                </Typography>
               </Paper>
             </Grid>
           </Grid>
         </Container>
       </Box>
 
-      {/* SERVICES */}
       <Container maxWidth="lg" sx={{ mt: 6, mb: 7 }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -362,7 +388,6 @@ const Home = () => {
         )}
       </Container>
 
-      {/* WHY */}
       <Box sx={{ py: 7 }}>
         <Container maxWidth="lg">
           <Paper sx={{ p: { xs: 2.4, md: 4 }, borderRadius: 4 }}>
@@ -410,6 +435,12 @@ const Home = () => {
                 </Paper>
               </Grid>
             </Grid>
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} sx={{ mt: 3 }}>
+              <Chip icon={<CheckCircleIcon />} label="Design premium" />
+              <Chip icon={<CheckCircleIcon />} label="Responsive desktop/mobile" />
+              <Chip icon={<CheckCircleIcon />} label="Navigation fluide" />
+            </Stack>
           </Paper>
         </Container>
       </Box>

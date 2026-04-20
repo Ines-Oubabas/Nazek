@@ -86,23 +86,28 @@ def resolve_service(service_value):
     - un ID (ex: "3")
     - un nom (ex: "Plomberie")
     """
-    if service_value is None or str(service_value).strip() == "":
+    if isinstance(service_value, Service):
+        return service_value
+
+    if service_value is None:
         return None
 
-    # try int id
-    try:
-        return Service.objects.get(pk=int(service_value))
-    except (ValueError, TypeError):
-        pass
-    except Service.DoesNotExist:
-        return None
+    if isinstance(service_value, int) or (isinstance(service_value, str) and service_value.strip().isdigit()):
+        try:
+            return Service.objects.get(pk=int(service_value))
+        except Service.DoesNotExist:
+            return None
 
-    # fallback name
-    name = str(service_value).strip()
-    try:
-        return Service.objects.get(name__iexact=name)
-    except Service.DoesNotExist:
-        return None
+    if isinstance(service_value, str):
+        name = service_value.strip()
+        if not name:
+            return None
+        try:
+            return Service.objects.get(name__iexact=name)
+        except Service.DoesNotExist:
+            return None
+
+    return None
 
 
 # -----------------------------
@@ -171,11 +176,18 @@ def auto_pick_employer_if_missing(data):
     if data.get("employer"):
         return data
 
-    service_id = data.get("service")
-    if not service_id:
+    service_value = data.get("service")
+    if not service_value:
         return data
 
-    employer = Employer.objects.filter(service_id=service_id, is_active=True).first()
+    service_obj = resolve_service(service_value)
+    if not service_obj:
+        return data
+
+    # Normalise le payload pour le serializer ModelSerializer attendu (PK)
+    data["service"] = service_obj.id
+
+    employer = Employer.objects.filter(service=service_obj, is_active=True).first()
     if employer:
         data["employer"] = employer.id
 
