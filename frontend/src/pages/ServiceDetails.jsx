@@ -45,31 +45,17 @@ const pad2 = (n) => String(n).padStart(2, "0");
 const normalizeDateTime = (value) => {
   if (!value) return { date: "", time: "" };
 
-  if (typeof value === "object" && (value.date || value.time)) {
-    let dateStr = "";
-    if (value.date instanceof Date) {
-      dateStr = `${value.date.getFullYear()}-${pad2(value.date.getMonth() + 1)}-${pad2(
-        value.date.getDate()
-      )}`;
-    } else if (typeof value.date === "string") {
-      dateStr = value.date.includes("T") ? value.date.split("T")[0] : value.date;
-    }
-
-    let timeStr = "";
-    if (typeof value.time === "string") {
-      timeStr = value.time.slice(0, 5);
-    } else if (value.date instanceof Date) {
-      timeStr = `${pad2(value.date.getHours())}:${pad2(value.date.getMinutes())}`;
-    }
-
-    return { date: dateStr, time: timeStr };
-  }
-
   if (value instanceof Date) {
     return {
       date: `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`,
       time: `${pad2(value.getHours())}:${pad2(value.getMinutes())}`,
     };
+  }
+
+  if (typeof value === "object" && (value.date || value.time)) {
+    const date = typeof value.date === "string" ? value.date.split("T")[0] : "";
+    const time = typeof value.time === "string" ? value.time.slice(0, 5) : "";
+    return { date, time };
   }
 
   if (typeof value === "string") {
@@ -97,44 +83,24 @@ const ServiceDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isClient, isEmployer } = useAuth();
 
   const [service, setService] = useState(null);
   const [employers, setEmployers] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [isFavorite, setIsFavorite] = useState(false);
-
   const [selectedEmployerId, setSelectedEmployerId] = useState("");
   const [showCalendar, setShowCalendar] = useState(false);
-
   const [showBookingDialog, setShowBookingDialog] = useState(false);
+
   const [bookingNotes, setBookingNotes] = useState("");
   const [selectedDateTime, setSelectedDateTime] = useState(null);
 
-  const getEmployerName = (e) =>
-    e?.name || e?.user?.username || e?.user?.email || `Prestataire #${e?.id}`;
-
-  const getEmployerDesc = (e) =>
-    e?.description || e?.bio || e?.user?.first_name || "Prestataire de service";
-
   const employersForService = useMemo(() => {
     if (!service) return [];
-
-    const sId = String(service.id);
-    const sName = String(service.name || "").toLowerCase();
-
-    const filtered = employers.filter((e) => {
-      if (e?.service && String(e.service) === sId) return true;
-      if (e?.service?.id && String(e.service.id) === sId) return true;
-      if (e?.category && String(e.category).toLowerCase() === sName) return true;
-      if (e?.service_name && String(e.service_name).toLowerCase() === sName) return true;
-      return false;
-    });
-
-    return filtered.length > 0 ? filtered : employers;
+    return employers.filter((e) => Number(e?.service?.id || e?.service) === Number(service.id));
   }, [employers, service]);
 
   const selectedEmployer = useMemo(() => {
@@ -143,37 +109,20 @@ const ServiceDetails = () => {
   }, [selectedEmployerId, employersForService]);
 
   useEffect(() => {
-    if (employersForService.length > 0) {
-      setSelectedEmployerId((prev) => {
-        const stillExists = employersForService.some((e) => String(e.id) === String(prev));
-        return stillExists ? prev : String(employersForService[0].id);
-      });
-    } else {
-      setSelectedEmployerId("");
-    }
-  }, [employersForService]);
-
-  useEffect(() => {
     const fetchAll = async () => {
       try {
         setLoading(true);
         setError("");
-
-        const [serviceData, employerList] = await Promise.all([
-          serviceAPI.detail(id),
-          employerAPI.list(),
-        ]);
-
+        const [serviceData, employerList] = await Promise.all([serviceAPI.detail(id), employerAPI.list()]);
         setService(serviceData);
         const list = Array.isArray(employerList) ? employerList : employerList?.results ?? [];
         setEmployers(list);
       } catch (err) {
-        setError(err.message || "Une erreur est survenue lors du chargement du service");
+        setError(err.message || "Erreur de chargement du service.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchAll();
   }, [id]);
 
@@ -183,72 +132,51 @@ const ServiceDetails = () => {
     setIsFavorite(favorites.map(String).includes(String(service.id)));
   }, [service?.id]);
 
-  const goLogin = () => {
-    navigate("/login", { state: { from: location.pathname } });
-  };
+  useEffect(() => {
+    if (employersForService.length > 0) {
+      setSelectedEmployerId(String(employersForService[0].id));
+    } else {
+      setSelectedEmployerId("");
+    }
+  }, [employersForService]);
 
-  const handleFavoriteClick = () => {
+  const goLogin = () => navigate("/login", { state: { from: location.pathname } });
+
+  const toggleFavorite = () => {
     if (!service?.id) return;
-
     const favorites = readFavorites();
     const exists = favorites.map(String).includes(String(service.id));
-
     const next = exists
       ? favorites.filter((favId) => String(favId) !== String(service.id))
       : [...favorites, service.id];
-
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
     setIsFavorite(!exists);
   };
 
   const handleOpenCalendar = () => {
     if (!user) return goLogin();
-    if (!service) {
-      setError("Service introuvable.");
+
+    if (isEmployer) {
+      setError("Un prestataire ne peut pas réserver de rendez-vous.");
       return;
     }
-    if (service.is_active === false) {
-      setError("Ce service est indisponible pour le moment.");
-      return;
-    }
+
     if (!selectedEmployer) {
-      setError("Veuillez sélectionner un prestataire avant de réserver.");
+      setError("Choisis un prestataire.");
       return;
     }
+
     setError("");
     setShowCalendar(true);
   };
 
-  const handleSelectDateTime = (dateTime) => {
-    if (!user) return goLogin();
-    if (!selectedEmployer) {
-      setError("Veuillez sélectionner un prestataire avant de choisir une date.");
-      return;
-    }
-    setError("");
-    setSelectedDateTime(dateTime);
-    setShowBookingDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setShowBookingDialog(false);
-  };
-
   const handleConfirmBooking = async () => {
     try {
-      if (!user) return goLogin();
-
-      if (!service) throw new Error("Service introuvable.");
+      if (!isClient) throw new Error("Seul un client peut réserver un rendez-vous.");
       if (!selectedEmployer) throw new Error("Prestataire introuvable.");
-      if (!selectedDateTime) throw new Error("Veuillez choisir une date et une heure.");
 
       const { date, time } = normalizeDateTime(selectedDateTime);
-
-      if (!date || !time) {
-        throw new Error("Date/heure invalide. Veuillez re-sélectionner un créneau.");
-      }
-
-      setError("");
+      if (!date || !time) throw new Error("Choisis une date et une heure valides.");
 
       await appointmentAPI.create({
         service: service.id,
@@ -262,221 +190,165 @@ const ServiceDetails = () => {
       setShowCalendar(false);
       setBookingNotes("");
       setSelectedDateTime(null);
-
       navigate("/appointments");
     } catch (err) {
-      if (err.status === 401) return goLogin();
-      setError(err.message || "Erreur lors de la réservation");
+      setError(err.message || "Réservation impossible.");
     }
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error && !service) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="error">{error}</Alert>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+          <CircularProgress />
+          <Typography sx={{ mt: 1.5 }}>Chargement du service...</Typography>
+        </Paper>
       </Container>
     );
   }
 
   if (!service) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="info">Service non trouvé</Alert>
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Alert severity="error">Service introuvable.</Alert>
       </Container>
     );
   }
 
-  const { date: pickedDate, time: pickedTime } = normalizeDateTime(selectedDateTime);
-
   return (
-    <Container maxWidth="xl" sx={{ mt: 2, mb: 7 }}>
+    <Container maxWidth="lg" sx={{ py: 3 }}>
       {error && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Grid container spacing={2.2}>
-        <Grid item xs={12} md={8}>
-          <Paper
-            sx={{
-              p: { xs: 2, md: 3 },
-              borderRadius: 4,
-              background:
-                "radial-gradient(circle at 10% -30%, rgba(243,139,42,.14), transparent 38%), #171b22",
-            }}
-          >
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              justifyContent="space-between"
-              alignItems={{ xs: "flex-start", sm: "center" }}
-              spacing={1.5}
-              sx={{ mb: 2 }}
-            >
-              <Box>
-                <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                  {service.name}
-                </Typography>
-
-                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
-                  {service.icon ? <Chip label={service.icon} /> : null}
-                  {service.is_active === false ? (
-                    <Chip color="warning" label="Indisponible" />
-                  ) : (
-                    <Chip color="success" label="Actif" />
-                  )}
-                </Stack>
-              </Box>
-
-              <Button
-                startIcon={isFavorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                onClick={handleFavoriteClick}
-                variant={isFavorite ? "contained" : "outlined"}
-              >
-                {isFavorite ? "Favori" : "Ajouter aux favoris"}
-              </Button>
-            </Stack>
-
-            <Box sx={{ mb: 2 }}>
-              <Rating value={Number(service.rating || 0)} readOnly precision={0.5} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
-                {service.review_count ? `${service.review_count} avis` : "Aucun avis pour le moment"}
-              </Typography>
-            </Box>
-
-            <Typography variant="body1" color="text.secondary" paragraph>
+      <Paper sx={{ p: 3, borderRadius: 4, mb: 2, background: alpha("#171b22", 0.9) }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              {service.name}
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
               {service.description || "Aucune description."}
             </Typography>
-
-            <Stack spacing={1.2} sx={{ mb: 2.2 }}>
-              {service.location ? (
-                <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }}>
-                  <LocationIcon sx={{ color: "primary.main" }} />
-                  <Typography>{service.location}</Typography>
-                </Box>
-              ) : null}
-
-              {service.duration ? (
-                <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }}>
-                  <TimeIcon sx={{ color: "primary.main" }} />
-                  <Typography>Durée estimée: {service.duration} minutes</Typography>
-                </Box>
-              ) : null}
-
-              <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }}>
-                <EuroIcon sx={{ color: "primary.main" }} />
-                <Typography sx={{ fontWeight: 700 }}>
-                  {service.price ? `${service.price}€` : "Tarif sur demande"}
-                </Typography>
-              </Box>
+            <Stack direction="row" spacing={1} sx={{ mt: 1.4 }}>
+              <Chip icon={<EuroIcon />} label="Prix selon prestataire" />
+              <Chip icon={<LocationIcon />} label="À domicile / sur site" />
+              <Chip icon={<TimeIcon />} label="Créneaux disponibles" />
             </Stack>
+          </Box>
 
-            <Divider sx={{ my: 2 }} />
+          <Button
+            variant={isFavorite ? "contained" : "outlined"}
+            startIcon={isFavorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+            onClick={toggleFavorite}
+          >
+            {isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+          </Button>
+        </Stack>
+      </Paper>
 
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              disabled={service.is_active === false}
-              onClick={handleOpenCalendar}
-              startIcon={<CalendarMonthIcon />}
-            >
-              Réserver ce service
-            </Button>
-          </Paper>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={7}>
+          <Paper sx={{ p: 2.2, borderRadius: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.5 }}>
+              Prestataires
+            </Typography>
 
-          {showCalendar && (
-            <Paper sx={{ mt: 2.2, p: 2.2, borderRadius: 3.5 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.2 }}>
-                Choisissez une date et une heure
-              </Typography>
-              <AppointmentCalendar onSelectDateTime={handleSelectDateTime} provider={selectedEmployer} />
-            </Paper>
-          )}
-        </Grid>
-
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2.2, borderRadius: 3.5 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.2 }}>
-              <PersonIcon sx={{ color: "primary.main" }} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Prestataire
-              </Typography>
-            </Stack>
-
-            <FormControl fullWidth sx={{ mb: 1.5 }}>
-              <InputLabel>Choisir un prestataire</InputLabel>
+            <FormControl fullWidth>
+              <InputLabel id="provider-select">Choisir un prestataire</InputLabel>
               <Select
-                value={selectedEmployerId}
+                labelId="provider-select"
                 label="Choisir un prestataire"
+                value={selectedEmployerId}
                 onChange={(e) => setSelectedEmployerId(e.target.value)}
               >
                 {employersForService.map((e) => (
                   <MenuItem key={e.id} value={String(e.id)}>
-                    {getEmployerName(e)}
+                    {e.name || `Prestataire #${e.id}`}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
 
             {selectedEmployer ? (
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2.5,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  backgroundColor: alpha("#232935", 0.52),
-                }}
-              >
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  {getEmployerName(selectedEmployer)}
+              <Paper sx={{ p: 1.8, mt: 1.7, borderRadius: 2.5 }}>
+                <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
+                  <PersonIcon sx={{ color: "primary.main" }} />
+                  <Typography sx={{ fontWeight: 700 }}>{selectedEmployer.name}</Typography>
+                </Stack>
+                <Rating value={Number(selectedEmployer.average_rating || 0)} precision={0.5} readOnly />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {selectedEmployer.description || "Aucune description du prestataire."}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.7 }}>
-                  {getEmployerDesc(selectedEmployer)}
-                </Typography>
-              </Box>
+              </Paper>
             ) : (
-              <Alert severity="info">Aucun prestataire trouvé.</Alert>
+              <Alert severity="warning" sx={{ mt: 1.5 }}>
+                Aucun prestataire trouvé pour ce service.
+              </Alert>
             )}
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12} md={5}>
+          <Paper sx={{ p: 2.2, borderRadius: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              Réservation
+            </Typography>
+            <Divider sx={{ my: 1.4 }} />
+
+            {isEmployer && (
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                Compte prestataire: vous ne pouvez pas créer de rendez-vous.
+              </Alert>
+            )}
+
+            <Button
+              fullWidth
+              size="large"
+              variant="contained"
+              startIcon={<CalendarMonthIcon />}
+              onClick={handleOpenCalendar}
+              disabled={!isClient}
+            >
+              Choisir un créneau
+            </Button>
           </Paper>
         </Grid>
       </Grid>
 
-      <Dialog open={showBookingDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Confirmer la réservation</DialogTitle>
+      <Dialog open={showCalendar} onClose={() => setShowCalendar(false)} fullWidth maxWidth="md">
+        <DialogTitle>Choisir une date et une heure</DialogTitle>
         <DialogContent>
-          {pickedDate && pickedTime ? (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Créneau sélectionné : <b>{pickedDate}</b> à <b>{pickedTime}</b>
-            </Alert>
-          ) : null}
+          <AppointmentCalendar
+            onSelectDateTime={(dt) => {
+              setSelectedDateTime(dt);
+              setShowBookingDialog(true);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Notes pour le prestataire (optionnel)
+      <Dialog open={showBookingDialog} onClose={() => setShowBookingDialog(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Confirmer la réservation</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Ajoute un commentaire pour préciser ton besoin.
           </Typography>
-
           <TextField
             fullWidth
+            label="Notes"
             multiline
-            rows={4}
+            minRows={3}
             value={bookingNotes}
             onChange={(e) => setBookingNotes(e.target.value)}
-            placeholder="Ex: Adresse, détails du besoin, étage, etc."
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Annuler</Button>
+          <Button onClick={() => setShowBookingDialog(false)}>Annuler</Button>
           <Button variant="contained" onClick={handleConfirmBooking}>
-            Confirmer la réservation
+            Confirmer
           </Button>
         </DialogActions>
       </Dialog>

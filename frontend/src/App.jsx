@@ -5,6 +5,8 @@ import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
+import CircularProgress from "@mui/material/CircularProgress";
+import Typography from "@mui/material/Typography";
 
 import Navigation from "./components/common/Navigation";
 
@@ -131,65 +133,43 @@ const theme = createTheme({
         },
       },
     },
-    MuiTextField: {
-      defaultProps: {
-        variant: "outlined",
-      },
-    },
-    MuiOutlinedInput: {
-      styleOverrides: {
-        root: {
-          backgroundColor: "#181c25",
-          borderRadius: 12,
-          "& .MuiOutlinedInput-notchedOutline": { borderColor: brand.border },
-          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: brand.orange },
-          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-            borderColor: brand.orange,
-            borderWidth: 1.5,
-          },
-        },
-        input: {
-          color: brand.text,
-          "&::placeholder": { color: brand.muted, opacity: 1 },
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderBottom: `1px solid ${brand.border}`,
-        },
-        head: {
-          color: brand.text,
-          fontWeight: 700,
-          backgroundColor: alpha(brand.slate, 0.72),
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 10,
-        },
-      },
-    },
-    MuiAlert: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          border: `1px solid ${brand.border}`,
-        },
-      },
-    },
   },
 });
 
+const FullPageLoader = () => (
+  <Container
+    maxWidth="sm"
+    sx={{
+      minHeight: "60vh",
+      display: "grid",
+      placeItems: "center",
+      textAlign: "center",
+    }}
+  >
+    <Box>
+      <CircularProgress />
+      <Typography sx={{ mt: 2, color: "text.secondary" }}>Chargement de votre session...</Typography>
+    </Box>
+  </Container>
+);
+
 const RequireAuth = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (loading) return <FullPageLoader />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+
+  return children;
+};
+
+const RequireClient = ({ children }) => {
+  const { loading, isClient } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <FullPageLoader />;
+  if (!isClient) {
+    return <Navigate to="/appointments" replace state={{ from: location.pathname }} />;
   }
 
   return children;
@@ -207,12 +187,22 @@ const AppRoutes = () => {
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <Navigation />
 
-      <Box component="main" sx={{ flex: 1, py: { xs: 2, md: 4 } }}>
+      <Box component="main" sx={{ flex: 1, py: { xs: 2, md: 4 }, mt: "72px" }}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Search />} />
           <Route path="/help" element={<Help />} />
           <Route path="/services/:id" element={<ServiceDetails />} />
+
+          <Route
+            path="/search"
+            element={
+              <RequireAuth>
+                <RequireClient>
+                  <Search />
+                </RequireClient>
+              </RequireAuth>
+            }
+          />
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -225,6 +215,7 @@ const AppRoutes = () => {
               </RequireAuth>
             }
           />
+
           <Route
             path="/appointments"
             element={
@@ -233,6 +224,7 @@ const AppRoutes = () => {
               </RequireAuth>
             }
           />
+
           <Route
             path="/messages"
             element={
@@ -241,11 +233,14 @@ const AppRoutes = () => {
               </RequireAuth>
             }
           />
+
           <Route
             path="/favorites"
             element={
               <RequireAuth>
-                <Favorites />
+                <RequireClient>
+                  <Favorites />
+                </RequireClient>
               </RequireAuth>
             }
           />
@@ -262,12 +257,7 @@ const App = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Router
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true,
-          }}
-        >
+        <Router>
           <AppRoutes />
         </Router>
       </AuthProvider>

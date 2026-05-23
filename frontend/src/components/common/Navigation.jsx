@@ -22,6 +22,7 @@ import {
   ListItemButton,
   Tooltip,
   Chip,
+  CircularProgress,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
@@ -36,6 +37,7 @@ import {
   Favorite as FavoriteIcon,
   Chat as ChatIcon,
   Help as HelpIcon,
+  WorkOutline as WorkOutlineIcon,
 } from "@mui/icons-material";
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -47,7 +49,7 @@ const Navigation = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const { user, logout } = useAuth();
+  const { user, logout, loading, isClient, isEmployer } = useAuth();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorUserMenu, setAnchorUserMenu] = useState(null);
@@ -75,14 +77,21 @@ const Navigation = () => {
   const menuItems = useMemo(
     () => [
       { text: "Accueil", icon: <HomeIcon />, path: "/", auth: false },
-      { text: "Rechercher", icon: <SearchIcon />, path: "/search", auth: false },
+      { text: "Rechercher", icon: <SearchIcon />, path: "/search", auth: false, clientOnly: true },
       { text: "Rendez-vous", icon: <CalendarIcon />, path: "/appointments", auth: true },
-      { text: "Favoris", icon: <FavoriteIcon />, path: "/favorites", auth: true },
+      { text: "Favoris", icon: <FavoriteIcon />, path: "/favorites", auth: true, clientOnly: true },
       { text: "Messages", icon: <ChatIcon />, path: "/messages", auth: true },
       { text: "Aide", icon: <HelpIcon />, path: "/help", auth: false },
     ],
     []
   );
+
+  const filteredMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      if (item.clientOnly && isEmployer) return false;
+      return true;
+    });
+  }, [menuItems, isEmployer]);
 
   const handleDrawerToggle = () => setMobileOpen((v) => !v);
 
@@ -96,7 +105,6 @@ const Navigation = () => {
 
   const fetchNotifications = async () => {
     if (!user) return;
-
     try {
       setNotifLoading(true);
       const data = await notificationAPI.list();
@@ -158,15 +166,7 @@ const Navigation = () => {
 
   const drawer = (
     <Box sx={{ width: 300, height: "100%", bgcolor: "background.paper", p: 1.5 }}>
-      <Box
-        sx={{
-          px: 1,
-          py: 1.5,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <Box sx={{ px: 1, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary", letterSpacing: "-0.02em" }}>
             Nazek
@@ -175,13 +175,13 @@ const Navigation = () => {
             Premium services platform
           </Typography>
         </Box>
-        <Chip label="Premium" size="small" color="primary" />
+        <Chip label={isEmployer ? "Pro" : "Client"} size="small" color="primary" />
       </Box>
 
       <Divider sx={{ borderColor: "divider", mb: 1.5 }} />
 
       <List sx={{ px: 0.5 }}>
-        {menuItems.map((item) => (
+        {filteredMenuItems.map((item) => (
           <ListItemButton
             key={item.text}
             selected={location.pathname === item.path}
@@ -199,12 +199,7 @@ const Navigation = () => {
               },
             }}
           >
-            <ListItemIcon
-              sx={{
-                minWidth: 38,
-                color: location.pathname === item.path ? "primary.light" : "text.secondary",
-              }}
-            >
+            <ListItemIcon sx={{ minWidth: 38, color: location.pathname === item.path ? "primary.light" : "text.secondary" }}>
               {item.icon}
             </ListItemIcon>
             <ListItemText primary={item.text} />
@@ -260,7 +255,7 @@ const Navigation = () => {
               sx={{ borderRadius: 2 }}
             >
               <ListItemIcon sx={{ minWidth: 38, color: "text.secondary" }}>
-                <PersonIcon />
+                <WorkOutlineIcon />
               </ListItemIcon>
               <ListItemText primary="Inscription" />
             </ListItemButton>
@@ -307,195 +302,113 @@ const Navigation = () => {
             </Typography>
 
             {!isMobile && (
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: 0.45,
-                  minWidth: 0,
-                  overflowX: "auto",
-                  py: 0.2,
-                  pr: 0.4,
-                  "&::-webkit-scrollbar": { height: 6 },
-                  "&::-webkit-scrollbar-thumb": {
-                    backgroundColor: alpha(theme.palette.divider, 0.9),
-                    borderRadius: 999,
-                  },
-                }}
-              >
-                {menuItems.map((item) => {
-                  const active = location.pathname === item.path;
-                  return (
-                    <Button
-                      key={item.text}
-                      startIcon={item.icon}
-                      onClick={() => goTo(item.path, item.auth)}
-                      sx={navButtonSx(active)}
-                    >
-                      {item.text}
-                    </Button>
-                  );
-                })}
+              <Box sx={{ display: "flex", gap: 0.45, minWidth: 0, overflowX: "auto", py: 0.2, pr: 0.4 }}>
+                {filteredMenuItems.map((item) => (
+                  <Button
+                    key={item.text}
+                    startIcon={item.icon}
+                    onClick={() => goTo(item.path, item.auth)}
+                    sx={navButtonSx(location.pathname === item.path)}
+                  >
+                    {item.text}
+                  </Button>
+                ))}
               </Box>
             )}
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexShrink: 0 }}>
-            {user && (
-              <>
-                <Tooltip title="Notifications">
-                  <IconButton onClick={openNotifMenu} aria-label="notifications">
-                    <Badge
-                      badgeContent={notifLoading ? 0 : unreadCount}
-                      color="error"
-                      invisible={!unreadCount && !notifLoading}
-                    >
-                      <NotificationsIcon />
-                    </Badge>
-                  </IconButton>
-                </Tooltip>
+          {loading ? (
+            <CircularProgress size={22} />
+          ) : user ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+              <Tooltip title="Notifications">
+                <IconButton onClick={openNotifMenu} sx={{ color: "text.primary" }}>
+                  <Badge badgeContent={unreadCount} color="error">
+                    <NotificationsIcon />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
 
-                <Menu
-                  anchorEl={anchorNotifMenu}
-                  open={Boolean(anchorNotifMenu)}
-                  onClose={closeNotifMenu}
-                  PaperProps={{
-                    sx: {
-                      width: 370,
-                      maxWidth: "92vw",
-                      bgcolor: "background.paper",
-                      border: "1px solid",
-                      borderColor: "divider",
-                      mt: 1.2,
-                    },
-                  }}
-                >
-                  <Box sx={{ px: 2, py: 1.5 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                      Notifications
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {unreadCount ? `${unreadCount} non lue(s)` : "Aucune notification non lue"}
-                    </Typography>
-                  </Box>
-                  <Divider />
-
-                  {(notifications.slice(0, 6) || []).map((n) => (
-                    <MenuItem
-                      key={n.id}
-                      onClick={() => n?.id && handleMarkRead(n.id)}
-                      sx={{
-                        whiteSpace: "normal",
-                        alignItems: "flex-start",
-                        opacity: n?.is_read ? 0.68 : 1,
-                        py: 1.2,
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          {n.title || "Notification"}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {n.message || ""}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
-
-                  {notifications.length === 0 && (
-                    <Box sx={{ p: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Rien à afficher.
-                      </Typography>
-                    </Box>
-                  )}
-
-                  <Divider />
-                  <MenuItem
-                    onClick={() => {
-                      closeNotifMenu();
-                      fetchNotifications();
-                    }}
-                  >
-                    Rafraîchir
-                  </MenuItem>
-                </Menu>
-              </>
-            )}
-
-            {user ? (
-              <>
-                <Tooltip title={userDisplayName}>
-                  <IconButton onClick={openUserMenu} aria-label="user-menu">
-                    <Avatar
-                      src={userAvatarSrc}
-                      sx={{
-                        bgcolor: "secondary.main",
-                        color: "text.primary",
-                        border: "1px solid",
-                        borderColor: alpha(theme.palette.primary.main, 0.38),
-                      }}
-                    >
-                      {userDisplayName?.[0]?.toUpperCase() || "U"}
-                    </Avatar>
-                  </IconButton>
-                </Tooltip>
-
-                <Menu
-                  anchorEl={anchorUserMenu}
-                  open={Boolean(anchorUserMenu)}
-                  onClose={closeUserMenu}
-                  PaperProps={{
-                    sx: {
-                      bgcolor: "background.paper",
-                      border: "1px solid",
-                      borderColor: "divider",
-                      mt: 1.2,
-                    },
-                  }}
-                >
-                  <MenuItem
-                    onClick={() => {
-                      closeUserMenu();
-                      goTo("/profile", true);
-                    }}
-                  >
-                    <PersonIcon sx={{ mr: 1 }} /> Mon profil
-                  </MenuItem>
-
-                  <MenuItem onClick={handleLogout}>
-                    <LogoutIcon sx={{ mr: 1 }} /> Déconnexion
-                  </MenuItem>
-                </Menu>
-              </>
-            ) : (
-              <>
-                <Button onClick={() => navigate("/login", { state: { from: location.pathname } })}>
-                  Connexion
-                </Button>
-                <Button variant="contained" onClick={() => navigate("/register")}>
-                  Inscription
-                </Button>
-              </>
-            )}
-          </Box>
+              <IconButton onClick={openUserMenu} sx={{ p: 0.2 }}>
+                <Avatar src={userAvatarSrc} sx={{ width: 34, height: 34 }}>
+                  {userDisplayName?.[0]?.toUpperCase() || "U"}
+                </Avatar>
+              </IconButton>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button variant="text" onClick={() => navigate("/login", { state: { from: location.pathname } })}>
+                Connexion
+              </Button>
+              <Button variant="contained" onClick={() => navigate("/register")}>
+                Inscription
+              </Button>
+            </Box>
+          )}
         </Toolbar>
       </AppBar>
 
-      <Toolbar sx={{ minHeight: "72px !important" }} />
-
-      <Drawer
-        variant="temporary"
-        anchor="left"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: "block", md: "none" },
-          "& .MuiDrawer-paper": { boxSizing: "border-box", width: 300 },
-        }}
-      >
+      <Drawer anchor="left" open={mobileOpen} onClose={handleDrawerToggle}>
         {drawer}
       </Drawer>
+
+      <Menu anchorEl={anchorUserMenu} open={Boolean(anchorUserMenu)} onClose={closeUserMenu}>
+        <MenuItem
+          onClick={() => {
+            navigate("/profile");
+            closeUserMenu();
+          }}
+        >
+          Mon profil
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            navigate("/appointments");
+            closeUserMenu();
+          }}
+        >
+          Mes rendez-vous
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleLogout}>Déconnexion</MenuItem>
+      </Menu>
+
+      <Menu
+        anchorEl={anchorNotifMenu}
+        open={Boolean(anchorNotifMenu)}
+        onClose={closeNotifMenu}
+        PaperProps={{ sx: { width: 340, maxHeight: 420 } }}
+      >
+        <Box sx={{ px: 1.5, py: 1, fontWeight: 700 }}>Notifications</Box>
+        <Divider />
+
+        {notifLoading ? (
+          <Box sx={{ px: 2, py: 2, display: "flex", justifyContent: "center" }}>
+            <CircularProgress size={20} />
+          </Box>
+        ) : notifications.length === 0 ? (
+          <Box sx={{ px: 2, py: 2, color: "text.secondary" }}>Aucune notification.</Box>
+        ) : (
+          notifications.map((n) => (
+            <MenuItem
+              key={n.id}
+              onClick={() => {
+                if (!n.is_read) handleMarkRead(n.id);
+              }}
+              sx={{ alignItems: "flex-start", whiteSpace: "normal", opacity: n.is_read ? 0.8 : 1 }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: n.is_read ? 500 : 700 }}>
+                  {n.title || "Notification"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {n.message || ""}
+                </Typography>
+              </Box>
+            </MenuItem>
+          ))
+        )}
+      </Menu>
     </>
   );
 };

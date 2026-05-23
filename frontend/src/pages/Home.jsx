@@ -1,39 +1,28 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Box,
   Container,
   Grid,
   Typography,
-  Button,
-  TextField,
-  InputAdornment,
+  Box,
   Paper,
-  CircularProgress,
-  Alert,
   Stack,
+  Button,
   Chip,
   Divider,
+  TextField,
+  InputAdornment,
 } from "@mui/material";
-import {
-  Search as SearchIcon,
-  LocationOn as LocationIcon,
-  ArrowForward as ArrowForwardIcon,
-  Star as StarIcon,
-  People as PeopleIcon,
-  Schedule as ScheduleIcon,
-  Security as SecurityIcon,
-  CalendarToday as CalendarIcon,
-  AutoAwesome as AutoAwesomeIcon,
-  CheckCircle as CheckCircleIcon,
-} from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
-
-import ServiceCard from "../components/common/ServiceCard";
-import { getServices } from "../services/api";
+import SearchIcon from "@mui/icons-material/Search";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import CalendarIcon from "@mui/icons-material/CalendarToday";
+import LocationIcon from "@mui/icons-material/LocationOn";
+import StarIcon from "@mui/icons-material/Star";
+import SecurityIcon from "@mui/icons-material/Security";
+import ScheduleIcon from "@mui/icons-material/Schedule";
+import PeopleIcon from "@mui/icons-material/People";
 import { useAuth } from "../contexts/AuthContext";
-
-const FAVORITES_KEY = "favorites_services";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -42,409 +31,160 @@ const Home = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [location, setLocation] = useState("");
 
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      const raw = localStorage.getItem(FAVORITES_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const popularServices = useMemo(() => services.slice(0, 6), [services]);
-
   const heroStats = useMemo(
     () => [
-      { label: "Services disponibles", value: services.length },
-      { label: "Favoris sauvegardés", value: favorites.length },
-      { label: "Expérience", value: "Premium" },
+      { label: "Prestataires", value: "500+" },
+      { label: "Villes", value: "42" },
+      { label: "Satisfaction", value: "4.8/5" },
     ],
-    [services.length, favorites.length]
+    []
   );
-
-  useEffect(() => {
-    fetchServices();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-  }, [favorites]);
-
-  const fetchServices = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const data = await getServices();
-      const list = Array.isArray(data) ? data : data?.results ?? [];
-      setServices(list);
-    } catch (err) {
-      setError(err.message || "Une erreur est survenue lors du chargement des services.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    navigate("/search", {
-      state: { query: searchQuery.trim(), location: location.trim() },
-    });
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set("q", searchQuery.trim());
+    if (location.trim()) params.set("location", location.trim());
+    navigate(`/search?${params.toString()}`);
   };
-
-  const handleFavoriteClick = (serviceId) => {
-    setFavorites((prev) =>
-      prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
-    );
-  };
-
-  const goAppointments = () => {
-    if (!user) {
-      navigate("/login", { state: { from: "/appointments" } });
-      return;
-    }
-    navigate("/appointments");
-  };
-
-  const goSearch = () => navigate("/search");
-  const goRegister = () => navigate("/register");
-
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 6 }}>
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 6 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-        <Button variant="contained" onClick={fetchServices}>
-          Réessayer
-        </Button>
-      </Container>
-    );
-  }
 
   return (
-    <Box>
-      <Box
-        sx={{
-          position: "relative",
-          overflow: "hidden",
-          py: { xs: 7, md: 10 },
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          background:
-            "radial-gradient(circle at 10% 0%, rgba(243,139,42,.24) 0%, transparent 35%), radial-gradient(circle at 82% 16%, rgba(86,169,255,.14) 0%, transparent 30%), linear-gradient(180deg, #12161f 0%, #111318 100%)",
-        }}
-      >
-        <Container maxWidth="lg">
-          <Grid container spacing={4.2} alignItems="center">
-            <Grid item xs={12} md={7}>
-              <Chip
-                icon={<AutoAwesomeIcon />}
-                label="Plateforme premium de services"
-                color="primary"
-                sx={{ mb: 2, fontWeight: 700 }}
-              />
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 5 } }}>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={7}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 2, md: 3 },
+              borderRadius: 4,
+              background: alpha("#171b22", 0.9),
+            }}
+          >
+            <Typography variant="h3" sx={{ fontWeight: 900, mb: 1.2 }}>
+              Réservez les meilleurs services en quelques clics
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 2.5 }}>
+              Trouvez rapidement le bon prestataire, comparez les offres et suivez vos rendez-vous
+              dans un espace clair, premium et cohérent.
+            </Typography>
 
-              <Typography
-                variant="h2"
-                component="h1"
-                sx={{
-                  fontSize: { xs: "2rem", md: "3rem" },
-                  lineHeight: 1.08,
-                  mb: 1.6,
-                  letterSpacing: "-0.03em",
-                }}
-              >
-                Réservez vos services avec un rendu{" "}
-                <Box component="span" sx={{ color: "primary.main" }}>
-                  moderne
-                </Box>{" "}
-                et haut de gamme.
-              </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.4} sx={{ mb: 2.5 }}>
+              <Button variant="contained" size="large" onClick={() => navigate("/search")} endIcon={<ArrowForwardIcon />}>
+                Réserver un service
+              </Button>
 
-              <Typography variant="h6" color="text.secondary" sx={{ mb: 3.1, maxWidth: 760 }}>
-                Trouvez rapidement le bon prestataire, comparez les offres et suivez vos rendez-vous
-                dans un espace clair, premium et cohérent.
-              </Typography>
+              <Button variant="outlined" size="large" onClick={() => navigate("/appointments")} startIcon={<CalendarIcon />}>
+                Mes rendez-vous
+              </Button>
 
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.4} sx={{ mb: 2.5 }}>
-                <Button variant="contained" size="large" onClick={goSearch} endIcon={<ArrowForwardIcon />}>
-                  Réserver un service
+              {!user && (
+                <Button variant="text" size="large" onClick={() => navigate("/register")} sx={{ color: "text.primary" }}>
+                  Créer un compte
                 </Button>
+              )}
+            </Stack>
 
-                <Button variant="outlined" size="large" onClick={goAppointments} startIcon={<CalendarIcon />}>
-                  Mes rendez-vous
-                </Button>
-
-                {!user && (
-                  <Button variant="text" size="large" onClick={goRegister} sx={{ color: "text.primary" }}>
-                    Créer un compte
-                  </Button>
-                )}
-              </Stack>
-
-              <Paper
-                elevation={0}
-                sx={{
-                  p: { xs: 1.6, md: 2.1 },
-                  borderRadius: 3,
-                  background: alpha("#171b22", 0.9),
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <Box component="form" onSubmit={handleSearch}>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={12} md={6}>
-                      <TextField
-                        fullWidth
-                        placeholder="Quel service recherchez-vous ?"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <SearchIcon sx={{ color: "text.secondary" }} />
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} md={4}>
-                      <TextField
-                        fullWidth
-                        placeholder="Ville / Adresse (optionnel)"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <LocationIcon sx={{ color: "text.secondary" }} />
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} md={2}>
-                      <Button
-                        type="submit"
-                        variant="contained"
-                        fullWidth
-                        sx={{ height: { xs: 44, md: 56 } }}
-                        endIcon={<ArrowForwardIcon />}
-                      >
-                        Rechercher
-                      </Button>
-                    </Grid>
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 1.6, md: 2.1 },
+                borderRadius: 3,
+                background: alpha("#171b22", 0.9),
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <Box component="form" onSubmit={handleSearch}>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      placeholder="Quel service recherchez-vous ?"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon sx={{ color: "text.secondary" }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
                   </Grid>
-                </Box>
-              </Paper>
 
-              <Stack direction="row" spacing={1} sx={{ mt: 2.1, flexWrap: "wrap" }}>
-                <Chip
-                  icon={<StarIcon />}
-                  label="Qualité"
-                  sx={{
-                    bgcolor: alpha("#f38b2a", 0.14),
-                    color: "text.primary",
-                    border: "1px solid",
-                    borderColor: "divider",
-                  }}
-                />
-                <Chip
-                  icon={<SecurityIcon />}
-                  label="Sécurisé"
-                  sx={{
-                    bgcolor: alpha("#56a9ff", 0.12),
-                    color: "text.primary",
-                    border: "1px solid",
-                    borderColor: "divider",
-                  }}
-                />
-                <Chip
-                  icon={<ScheduleIcon />}
-                  label="Rapide"
-                  sx={{
-                    bgcolor: alpha("#46bc74", 0.12),
-                    color: "text.primary",
-                    border: "1px solid",
-                    borderColor: "divider",
-                  }}
-                />
-              </Stack>
-            </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      placeholder="Ville / Adresse (optionnel)"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <LocationIcon sx={{ color: "text.secondary" }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
 
-            <Grid item xs={12} md={5}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 3,
-                  borderRadius: 4,
-                  background: alpha("#171b22", 0.9),
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-                  Aperçu rapide
-                </Typography>
-                <Divider sx={{ borderColor: "divider", mb: 2 }} />
-
-                <Stack spacing={1.35} sx={{ mb: 2 }}>
-                  <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
-                    <PeopleIcon sx={{ color: "primary.main" }} />
-                    <Typography>Espaces client et prestataire unifiés</Typography>
-                  </Box>
-
-                  <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
-                    <CalendarIcon sx={{ color: "primary.main" }} />
-                    <Typography>Réservation simple par créneaux</Typography>
-                  </Box>
-
-                  <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
-                    <SecurityIcon sx={{ color: "primary.main" }} />
-                    <Typography>Authentification & notifications</Typography>
-                  </Box>
-                </Stack>
-
-                <Grid container spacing={1}>
-                  {heroStats.map((item) => (
-                    <Grid item xs={4} key={item.label}>
-                      <Paper sx={{ p: 1.2, borderRadius: 2.2, bgcolor: alpha("#232935", 0.7) }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.label}
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                          {item.value}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
+                  <Grid item xs={12} md={2}>
+                    <Button type="submit" variant="contained" fullWidth sx={{ height: { xs: 44, md: 56 } }}>
+                      Rechercher
+                    </Button>
+                  </Grid>
                 </Grid>
+              </Box>
+            </Paper>
 
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.6 }}>
-                  Connecté : <b style={{ color: "#f2f4f8" }}>{user ? user.email || user.username : "Non"}</b>
-                </Typography>
-              </Paper>
-            </Grid>
-          </Grid>
-        </Container>
-      </Box>
-
-      <Container maxWidth="lg" sx={{ mt: 6, mb: 7 }}>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          alignItems={{ xs: "flex-start", sm: "center" }}
-          spacing={2}
-          sx={{ mb: 2.2 }}
-        >
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>
-              Services populaires
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Sélectionnez un service pour voir les détails et réserver.
-            </Typography>
-          </Box>
-
-          <Button variant="outlined" onClick={goSearch} startIcon={<SearchIcon />}>
-            Voir tout
-          </Button>
-        </Stack>
-
-        {services.length === 0 ? (
-          <Alert severity="info">Aucun service disponible pour le moment.</Alert>
-        ) : (
-          <Grid container spacing={3}>
-            {popularServices.map((service) => (
-              <Grid item xs={12} sm={6} md={4} key={service.id}>
-                <ServiceCard
-                  service={service}
-                  isFavorite={favorites.includes(service.id)}
-                  onFavoriteClick={() => handleFavoriteClick(service.id)}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        )}
-      </Container>
-
-      <Box sx={{ py: 7 }}>
-        <Container maxWidth="lg">
-          <Paper sx={{ p: { xs: 2.4, md: 4 }, borderRadius: 4 }}>
-            <Typography variant="h4" align="center" sx={{ fontWeight: 800 }}>
-              Pourquoi nous choisir ?
-            </Typography>
-            <Typography align="center" color="text.secondary" sx={{ mt: 1 }}>
-              Une expérience simple, structurée et crédible pour gérer vos services.
-            </Typography>
-
-            <Grid container spacing={2.2} sx={{ mt: 2.2 }}>
-              <Grid item xs={12} md={4}>
-                <Paper sx={{ p: 2.6, borderRadius: 3, height: "100%", bgcolor: "background.default" }}>
-                  <PeopleIcon sx={{ fontSize: 38, color: "primary.main", mb: 1 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Prestataires qualifiés
-                  </Typography>
-                  <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-                    Profils clairs, services structurés, suivi de chaque interaction.
-                  </Typography>
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <Paper sx={{ p: 2.6, borderRadius: 3, height: "100%", bgcolor: "background.default" }}>
-                  <ScheduleIcon sx={{ fontSize: 38, color: "primary.main", mb: 1 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Réservation rapide
-                  </Typography>
-                  <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-                    Parcours fluide de la recherche au rendez-vous confirmé.
-                  </Typography>
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <Paper sx={{ p: 2.6, borderRadius: 3, height: "100%", bgcolor: "background.default" }}>
-                  <SecurityIcon sx={{ fontSize: 38, color: "primary.main", mb: 1 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Sécurité & notifications
-                  </Typography>
-                  <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-                    Suivi sécurisé de l’activité et alertes en temps réel.
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} sx={{ mt: 3 }}>
-              <Chip icon={<CheckCircleIcon />} label="Design premium" />
-              <Chip icon={<CheckCircleIcon />} label="Responsive desktop/mobile" />
-              <Chip icon={<CheckCircleIcon />} label="Navigation fluide" />
+            <Stack direction="row" spacing={1} sx={{ mt: 2.1, flexWrap: "wrap" }}>
+              <Chip icon={<StarIcon />} label="Qualité" />
+              <Chip icon={<SecurityIcon />} label="Sécurisé" />
+              <Chip icon={<ScheduleIcon />} label="Rapide" />
             </Stack>
           </Paper>
-        </Container>
-      </Box>
-    </Box>
+        </Grid>
+
+        <Grid item xs={12} md={5}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: 4, background: alpha("#171b22", 0.9) }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+              Aperçu rapide
+            </Typography>
+            <Divider sx={{ borderColor: "divider", mb: 2 }} />
+
+            <Stack spacing={1.35} sx={{ mb: 2 }}>
+              <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
+                <PeopleIcon sx={{ color: "primary.main" }} />
+                <Typography>Espaces client et prestataire unifiés</Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
+                <CalendarIcon sx={{ color: "primary.main" }} />
+                <Typography>Réservation simple par créneaux</Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1.3, alignItems: "center" }}>
+                <SecurityIcon sx={{ color: "primary.main" }} />
+                <Typography>Authentification & notifications</Typography>
+              </Box>
+            </Stack>
+
+            <Grid container spacing={1}>
+              {heroStats.map((item) => (
+                <Grid item xs={4} key={item.label}>
+                  <Paper sx={{ p: 1.2, borderRadius: 2.2, bgcolor: alpha("#232935", 0.7) }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.label}
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                      {item.value}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Container>
   );
 };
 

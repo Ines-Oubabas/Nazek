@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Container,
   Grid,
@@ -7,11 +7,6 @@ import {
   Box,
   Typography,
   Button,
-  Rating,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   CircularProgress,
   Alert,
   Paper,
@@ -19,49 +14,34 @@ import {
   Stack,
   InputAdornment,
   Chip,
+  Autocomplete,
 } from "@mui/material";
 import {
   Search as SearchIcon,
   LocationOn as LocationIcon,
-  Star as StarIcon,
-  Euro as EuroIcon,
   RestartAlt as ResetIcon,
   Tune as TuneIcon,
-  Home as HomeIcon,
-  FilterAlt as FilterAltIcon,
-  InfoOutlined as InfoOutlinedIcon,
 } from "@mui/icons-material";
-import { alpha } from "@mui/material/styles";
 
-import { getServices } from "../services/api";
+import { getServices, searchPlacesMapbox } from "../services/api";
 import ServiceCard from "../components/common/ServiceCard";
 
 const FAVORITES_KEY = "favorites_services";
 
-const safeNumber = (v, fallback = 0) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
-
 const Search = () => {
   const navigate = useNavigate();
-  const routerLocation = useLocation();
   const [searchParams] = useSearchParams();
-
-  const initialQuery = routerLocation.state?.query ?? searchParams.get("q") ?? "";
-  const initialLocation = routerLocation.state?.location ?? searchParams.get("location") ?? "";
 
   const [allServices, setAllServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+
   const [filters, setFilters] = useState({
-    query: initialQuery,
-    location: initialLocation,
-    minPrice: "",
-    maxPrice: "",
-    rating: 0,
-    category: "",
+    query: searchParams.get("q") || "",
+    location: searchParams.get("location") || "",
   });
 
   const [favorites, setFavorites] = useState(() => {
@@ -83,93 +63,58 @@ const Search = () => {
         const list = Array.isArray(data) ? data : data?.results ?? [];
         setAllServices(list);
       } catch (err) {
-        setError(err.message || "Une erreur est survenue lors du chargement des services");
+        setError(err.message || "Erreur de chargement des services.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchServices();
   }, []);
-
-  useEffect(() => {
-    const q = searchParams.get("q") ?? "";
-    const loc = searchParams.get("location") ?? "";
-    setFilters((prev) => {
-      if (prev.query === q && prev.location === loc) return prev;
-      return { ...prev, query: q, location: loc };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.toString()]);
 
   useEffect(() => {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
   }, [favorites]);
 
-  const hasAnyPrice = useMemo(
-    () => allServices.some((s) => s?.price !== undefined && s?.price !== null),
-    [allServices]
-  );
+  useEffect(() => {
+    const run = async () => {
+      const q = (filters.location || "").trim();
+      if (q.length < 3) {
+        setLocationOptions([]);
+        return;
+      }
+      try {
+        setLocationLoading(true);
+        const results = await searchPlacesMapbox(q);
+        setLocationOptions(results.map((r) => r.place_name));
+      } finally {
+        setLocationLoading(false);
+      }
+    };
 
-  const hasAnyRating = useMemo(
-    () =>
-      allServices.some(
-        (s) => s?.rating !== undefined || s?.average_rating !== undefined || s?.avg_rating !== undefined
-      ),
-    [allServices]
-  );
-
-  const availableCategories = useMemo(() => {
-    const cats = new Set();
-    allServices.forEach((s) => {
-      const c = s?.category || s?.service_type || s?.type || "";
-      if (c) cats.add(String(c));
-    });
-    return Array.from(cats);
-  }, [allServices]);
+    const timer = setTimeout(run, 350);
+    return () => clearTimeout(timer);
+  }, [filters.location]);
 
   const filteredServices = useMemo(() => {
     const q = (filters.query || "").trim().toLowerCase();
     const loc = (filters.location || "").trim().toLowerCase();
-    const minP = filters.minPrice === "" ? null : safeNumber(filters.minPrice, null);
-    const maxP = filters.maxPrice === "" ? null : safeNumber(filters.maxPrice, null);
-    const minRating = safeNumber(filters.rating, 0);
-    const category = (filters.category || "").trim().toLowerCase();
 
     return allServices.filter((s) => {
-      if (q) {
-        const hay = `${s?.name ?? ""} ${s?.description ?? ""} ${s?.icon ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      const hay = `${s?.name ?? ""} ${s?.description ?? ""}`.toLowerCase();
+      if (q && !hay.includes(q)) return false;
 
       if (loc) {
         const hayLoc = `${s?.location ?? ""} ${s?.city ?? ""} ${s?.address ?? ""}`.toLowerCase();
         if (hayLoc && !hayLoc.includes(loc)) return false;
       }
 
-      if (category) {
-        const c = `${s?.category ?? s?.service_type ?? s?.type ?? ""}`.toLowerCase();
-        if (c && c !== category) return false;
-      }
-
-      if (hasAnyPrice) {
-        const price = safeNumber(s?.price, 0);
-        if (minP !== null && price < minP) return false;
-        if (maxP !== null && price > maxP) return false;
-      }
-
-      if (hasAnyRating) {
-        const r =
-          safeNumber(s?.rating, NaN) || safeNumber(s?.average_rating, NaN) || safeNumber(s?.avg_rating, NaN) || 0;
-        if (minRating > 0 && r < minRating) return false;
-      }
-
       return true;
     });
-  }, [allServices, filters, hasAnyPrice, hasAnyRating]);
+  }, [allServices, filters]);
 
-  const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
+  const handleReset = () => {
+    setFilters({ query: "", location: "" });
+    navigate("/search");
   };
 
   const handleSearchSubmit = (e) => {
@@ -179,45 +124,11 @@ const Search = () => {
     navigate(`/search?q=${q}&location=${loc}`);
   };
 
-  const handleReset = () => {
-    setFilters({
-      query: "",
-      location: "",
-      minPrice: "",
-      maxPrice: "",
-      rating: 0,
-      category: "",
-    });
-    navigate("/search");
-  };
-
   const toggleFavorite = (serviceId) => {
     setFavorites((prev) =>
       prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
     );
   };
-
-  const DataHint = ({ text }) => (
-    <Box
-      sx={{
-        mb: 1.1,
-        px: 1,
-        py: 0.7,
-        borderRadius: 1.6,
-        border: "1px solid",
-        borderColor: alpha("#56a9ff", 0.35),
-        bgcolor: alpha("#56a9ff", 0.08),
-        display: "flex",
-        alignItems: "center",
-        gap: 0.8,
-      }}
-    >
-      <InfoOutlinedIcon sx={{ fontSize: 18, color: "info.main" }} />
-      <Typography variant="caption" sx={{ color: "text.secondary", lineHeight: 1.35 }}>
-        {text}
-      </Typography>
-    </Box>
-  );
 
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 7 }}>
@@ -246,14 +157,9 @@ const Search = () => {
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleReset}>
-              Réinitialiser
-            </Button>
-            <Button variant="contained" startIcon={<HomeIcon />} onClick={() => navigate("/")}>
-              Accueil
-            </Button>
-          </Stack>
+          <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleReset}>
+            Réinitialiser
+          </Button>
         </Stack>
 
         <form onSubmit={handleSearchSubmit}>
@@ -261,9 +167,9 @@ const Search = () => {
             <Grid item xs={12} md={5}>
               <TextField
                 fullWidth
-                placeholder="Que recherchez-vous ? (ménage, plomberie, etc.)"
+                placeholder="Que recherchez-vous ?"
                 value={filters.query}
-                onChange={(e) => handleFilterChange("query", e.target.value)}
+                onChange={(e) => setFilters((p) => ({ ...p, query: e.target.value }))}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -275,18 +181,26 @@ const Search = () => {
             </Grid>
 
             <Grid item xs={12} md={5}>
-              <TextField
-                fullWidth
-                placeholder="Ville / Adresse (optionnel)"
-                value={filters.location}
-                onChange={(e) => handleFilterChange("location", e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LocationIcon sx={{ color: "text.secondary" }} />
-                    </InputAdornment>
-                  ),
-                }}
+              <Autocomplete
+                freeSolo
+                options={locationOptions}
+                inputValue={filters.location}
+                onInputChange={(_, value) => setFilters((p) => ({ ...p, location: value }))}
+                loading={locationLoading}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder="Ville / Adresse (Mapbox)"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LocationIcon sx={{ color: "text.secondary" }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
               />
             </Grid>
 
@@ -299,168 +213,32 @@ const Search = () => {
         </form>
       </Paper>
 
-      <Grid container spacing={2.5}>
-        <Grid item xs={12} md={3.2}>
-          <Paper sx={{ p: 2.2, borderRadius: 3.5, position: "sticky", top: 92 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <FilterAltIcon sx={{ color: "primary.main" }} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Filtres
-              </Typography>
-            </Stack>
-            <Divider sx={{ my: 1.6 }} />
-
-            <Box sx={{ mb: 2.5 }}>
-              <Typography gutterBottom sx={{ fontWeight: 700 }}>
-                Prix
-              </Typography>
-
-              {!hasAnyPrice ? (
-                <DataHint text="Le champ price n’est pas disponible côté backend." />
-              ) : null}
-
-              <Grid container spacing={1}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Min"
-                    type="number"
-                    value={filters.minPrice}
-                    onChange={(e) => handleFilterChange("minPrice", e.target.value)}
-                    disabled={!hasAnyPrice}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EuroIcon sx={{ color: "text.secondary" }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Max"
-                    type="number"
-                    value={filters.maxPrice}
-                    onChange={(e) => handleFilterChange("maxPrice", e.target.value)}
-                    disabled={!hasAnyPrice}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EuroIcon sx={{ color: "text.secondary" }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
+      {loading ? (
+        <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+          <CircularProgress />
+        </Paper>
+      ) : error ? (
+        <Alert severity="error">{error}</Alert>
+      ) : filteredServices.length === 0 ? (
+        <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+          <Typography>Aucun service trouvé.</Typography>
+        </Paper>
+      ) : (
+        <>
+          <Divider sx={{ mb: 2 }} />
+          <Grid container spacing={2}>
+            {filteredServices.map((service) => (
+              <Grid item xs={12} sm={6} md={4} key={service.id}>
+                <ServiceCard
+                  service={service}
+                  isFavorite={favorites.includes(service.id)}
+                  onToggleFavorite={() => toggleFavorite(service.id)}
+                />
               </Grid>
-            </Box>
-
-            <Box sx={{ mb: 2.5 }}>
-              <Typography gutterBottom sx={{ fontWeight: 700 }}>
-                Note minimum
-              </Typography>
-
-              {!hasAnyRating ? (
-                <DataHint text="Le champ rating n’est pas disponible côté backend." />
-              ) : null}
-
-              <Rating
-                value={filters.rating}
-                onChange={(_, value) => handleFilterChange("rating", value || 0)}
-                precision={0.5}
-                disabled={!hasAnyRating}
-                emptyIcon={<StarIcon style={{ opacity: 0.45 }} fontSize="inherit" />}
-              />
-            </Box>
-
-            <Box>
-              <Typography gutterBottom sx={{ fontWeight: 700 }}>
-                Catégorie
-              </Typography>
-
-              <FormControl fullWidth>
-                <InputLabel>Catégorie</InputLabel>
-                <Select
-                  value={filters.category}
-                  label="Catégorie"
-                  onChange={(e) => handleFilterChange("category", e.target.value)}
-                >
-                  <MenuItem value="">Toutes</MenuItem>
-                  {availableCategories.length > 0 ? (
-                    availableCategories.map((c) => (
-                      <MenuItem key={c} value={c}>
-                        {c}
-                      </MenuItem>
-                    ))
-                  ) : (
-                    <>
-                      <MenuItem value="beauty">Beauté</MenuItem>
-                      <MenuItem value="health">Santé</MenuItem>
-                      <MenuItem value="education">Éducation</MenuItem>
-                      <MenuItem value="home">Maison</MenuItem>
-                      <MenuItem value="other">Autre</MenuItem>
-                    </>
-                  )}
-                </Select>
-              </FormControl>
-            </Box>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={8.8}>
-          <Paper
-            elevation={0}
-            sx={{
-              mb: 1.5,
-              p: 1.7,
-              borderRadius: 2.7,
-              bgcolor: alpha("#232935", 0.6),
-              border: "1px solid",
-              borderColor: "divider",
-            }}
-          >
-            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
-              <Typography variant="body2" color="text.secondary">
-                Résultats : <b style={{ color: "#f2f4f8" }}>{filteredServices.length}</b> service(s)
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Favoris : <b style={{ color: "#f2f4f8" }}>{favorites.length}</b>
-              </Typography>
-            </Stack>
-          </Paper>
-
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
-              <CircularProgress />
-            </Box>
-          ) : error ? (
-            <Alert severity="error">{error}</Alert>
-          ) : filteredServices.length === 0 ? (
-            <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
-              <Typography variant="h6" sx={{ mb: 0.6 }}>
-                Aucun service trouvé
-              </Typography>
-              <Typography color="text.secondary">
-                Ajuste la recherche ou les filtres pour afficher des résultats.
-              </Typography>
-            </Paper>
-          ) : (
-            <Grid container spacing={2.2}>
-              {filteredServices.map((service) => (
-                <Grid item xs={12} sm={6} key={service.id}>
-                  <ServiceCard
-                    service={service}
-                    isFavorite={favorites.includes(service.id)}
-                    onFavoriteClick={() => toggleFavorite(service.id)}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Grid>
-      </Grid>
+            ))}
+          </Grid>
+        </>
+      )}
     </Container>
   );
 };
