@@ -1,7 +1,9 @@
+# appointments/views.py
 from datetime import datetime
 import random
 
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.db.models import DateTimeField, Q
 from django.utils import timezone
@@ -16,22 +18,51 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Appointment, Client, Employer, Service, Availability, Notification
+from .models import (
+    Appointment,
+    Availability,
+    Client,
+    ContactRequest,
+    Conversation,
+    Employer,
+    FavoriteEmployer,
+    FavoriteService,
+    Message,
+    Notification,
+    Review,
+    Service,
+)
 from .serializers import (
-    AppointmentSerializer,
+    AppointmentCancelSerializer,
     AppointmentCreateSerializer,
-    AppointmentReviewSerializer,
-    ClientSerializer,
-    EmployerSerializer,
-    EmployerUpdateSerializer,
-    ServiceSerializer,
+    AppointmentReviewLegacySerializer,
+    AppointmentSerializer,
     AvailabilitySerializer,
+    ClientProfileUpsertSerializer,
+    ClientSerializer,
+    ContactRequestSerializer,
+    ConversationCreateSerializer,
+    ConversationSerializer,
+    EmployerProfileUpsertSerializer,
+    EmployerSerializer,
+    FavoriteEmployerSerializer,
+    FavoriteServiceSerializer,
+    MessageCreateSerializer,
+    MessageSerializer,
+    MyProfilesSerializer,
     NotificationSerializer,
+    RegisterSerializer,
+    ReviewSerializer,
+    ServiceSerializer,
     UserSerializer,
 )
 
 User = get_user_model()
 
+
+# ----------------------------
+# Helpers
+# ----------------------------
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -107,7 +138,7 @@ def normalize_appointment_payload(data):
     if "description" not in data and "notes" in data:
         data["description"] = data.pop("notes")
 
-    for k in ["client", "status", "is_paid", "feedback", "rating", "created_at"]:
+    for k in ["client", "status", "is_paid", "feedback", "rating", "created_at", "updated_at"]:
         data.pop(k, None)
 
     try:
@@ -164,68 +195,75 @@ def user_appointments_queryset(user):
     return qs.none()
 
 
+def can_access_appointment(user, appointment: Appointment):
+    if user.is_staff or user.is_superuser:
+        return True
+    if hasattr(user, "client") and appointment.client_id == user.client.id:
+        return True
+    if hasattr(user, "employer") and appointment.employer_id == user.employer.id:
+        return True
+    return False
+
+
+def build_profiles_payload(user):
+    return MyProfilesSerializer(
+        {
+            "user": user,
+            "client": getattr(user, "client", None),
+            "employer": getattr(user, "employer", None),
+        }
+    ).data
+
+
+def first_non_empty(data, keys):
+    for key in keys:
+        value = data.get(key, None)
+        if value is not None and str(value).strip() != "":
+            return value
+    return None
+
+
+# ----------------------------
+# Auth
+# ----------------------------
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     @transaction.atomic
     def post(self, request):
-        raw = request.data.copy()
-        email = (raw.get("email") or "").strip().lower()
-        password = raw.get("password")
+        payload = request.data.copy()
 
-        if not email:
-            return Response({"email": ["Email requis."]}, status=status.HTTP_400_BAD_REQUEST)
-        if not password:
-            return Response({"password": ["Mot de passe requis."]}, status=status.HTTP_400_BAD_REQUEST)
-        if User.objects.filter(email__iexact=email).exists():
-            return Response({"email": ["Cette adresse email existe déjà."]}, status=status.HTTP_400_BAD_REQUEST)
+        # Compatibilité legacy avec ancien front
+        if "create_client_profile" not in payload and "create_employer_profile" not in payload:
+            role = payload.get("role")
+            if role:
+                role = str(role).strip().lower()
+            else:
+                role = "employer" if truthy(payload.get("is_employer")) else "client"
 
-        role = raw.get("role")
-        if not role:
-            role = "employer" if truthy(raw.get("is_employer")) else "client"
-        role = str(role).strip().lower()
-        if role not in {"client", "employer"}:
-            role = "client"
+            payload["create_client_profile"] = role == "client"
+            payload["create_employer_profile"] = role == "employer"
 
-        first_name = (raw.get("first_name") or "").strip()
-        last_name = (raw.get("last_name") or "").strip()
-        username = generate_unique_username(email=email, first_name=first_name, last_name=last_name)
+            # envoi ancien front
+            if payload.get("service_type") and not payload.get("employer_service_id"):
+                srv = resolve_service(payload.get("service_type"))
+                if srv:
+                    payload["employer_service_id"] = srv.id
 
-        user = User(
-            username=username,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            role=role,
-            phone=(raw.get("phone") or "").strip(),
-            address=(raw.get("address") or "").strip(),
-        )
-        user.set_password(password)
-        user.save()
+            if payload.get("service_description") and not payload.get("employer_description"):
+                payload["employer_description"] = payload.get("service_description")
 
-        full_name = f"{first_name} {last_name}".strip() or username
-
-        if role == "employer":
-            service_obj = resolve_service(raw.get("service_type") or raw.get("service"))
-            Employer.objects.create(
-                user=user,
-                name=full_name,
-                email=email,
-                phone=(raw.get("phone") or "").strip(),
-                service=service_obj,
-                description=(raw.get("service_description") or "").strip(),
-            )
-        else:
-            Client.objects.create(
-                user=user,
-                name=full_name,
-                email=email,
-                phone=(raw.get("phone") or "").strip(),
-                address=(raw.get("address") or "").strip(),
-            )
+        serializer = RegisterSerializer(data=payload, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
 
         return Response(
-            {"user": UserSerializer(user).data, "tokens": get_tokens_for_user(user)},
+            {
+                "user": UserSerializer(user).data,
+                "profiles": build_profiles_payload(user),
+                "tokens": get_tokens_for_user(user),
+            },
             status=status.HTTP_201_CREATED,
         )
 
@@ -252,7 +290,11 @@ class LoginView(APIView):
             return Response({"detail": "Mot de passe incorrect ou compte introuvable."}, status=status.HTTP_401_UNAUTHORIZED)
 
         return Response(
-            {"user": UserSerializer(user).data, "tokens": get_tokens_for_user(user)},
+            {
+                "user": UserSerializer(user).data,
+                "profiles": build_profiles_payload(user),
+                "tokens": get_tokens_for_user(user),
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -271,6 +313,57 @@ class LogoutView(APIView):
         return Response({"message": "Déconnexion réussie."}, status=status.HTTP_200_OK)
 
 
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data
+
+        old_password = first_non_empty(data, ["old_password", "current_password", "currentPassword", "password"])
+        new_password = first_non_empty(data, ["new_password", "newPassword"])
+        new_password_confirm = first_non_empty(
+            data,
+            ["new_password_confirm", "confirm_password", "confirmPassword", "newPasswordConfirm"],
+        )
+
+        if not old_password:
+            return Response({"old_password": ["Ancien mot de passe requis."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not new_password:
+            return Response({"new_password": ["Nouveau mot de passe requis."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # La confirmation est vérifiée uniquement si elle est envoyée
+        sent_confirmation = any(
+            key in data for key in ["new_password_confirm", "confirm_password", "confirmPassword", "newPasswordConfirm"]
+        )
+        if sent_confirmation and new_password_confirm != new_password:
+            return Response(
+                {"new_password_confirm": ["La confirmation du mot de passe ne correspond pas."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+
+        if not user.check_password(old_password):
+            return Response({"old_password": ["Ancien mot de passe incorrect."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, user=user)
+        except Exception as exc:
+            errors = list(exc.messages) if hasattr(exc, "messages") else ["Mot de passe invalide."]
+            return Response({"new_password": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+        # JWT reste valide jusqu'à expiration du token en cours.
+        return Response({"message": "Mot de passe mis à jour avec succès."}, status=status.HTTP_200_OK)
+
+
+# ----------------------------
+# User profile
+# ----------------------------
+
 class UserProfile(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -283,12 +376,28 @@ class UserProfile(APIView):
         serializer.save()
         return Response(serializer.data)
 
+    def patch(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
     @transaction.atomic
     def delete(self, request):
-        # suppression complète utilisateur + données liées (CASCADE)
         request.user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+class MyProfilesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(build_profiles_payload(request.user))
+
+
+# ----------------------------
+# Services + Search
+# ----------------------------
 
 class ServiceList(generics.ListCreateAPIView):
     queryset = Service.objects.filter(is_active=True).order_by("name")
@@ -319,6 +428,7 @@ class EmployerList(ListAPIView):
 
         q = (self.request.query_params.get("q") or "").strip()
         location = (self.request.query_params.get("location") or "").strip()
+        service = (self.request.query_params.get("service") or "").strip()
 
         if q:
             qs = qs.filter(
@@ -329,12 +439,64 @@ class EmployerList(ListAPIView):
 
         if location:
             qs = qs.filter(
-                Q(user__address__icontains=location)
+                Q(city__icontains=location)
+                | Q(address__icontains=location)
+                | Q(user__address__icontains=location)
                 | Q(description__icontains=location)
             )
 
+        if service:
+            if service.isdigit():
+                qs = qs.filter(service_id=int(service))
+            else:
+                qs = qs.filter(service__name__icontains=service)
+
         return qs.order_by("-is_verified", "-average_rating", "name")
 
+
+class SearchView(ListAPIView):
+    """
+    Endpoint dédié recherche prestataires :
+    - q (nom prestataire / description / service)
+    - location (ville/adresse)
+    - service (id ou nom)
+    """
+    permission_classes = [AllowAny]
+    serializer_class = EmployerSerializer
+
+    def get_queryset(self):
+        qs = Employer.objects.select_related("service", "user").filter(is_active=True)
+
+        q = (self.request.query_params.get("q") or "").strip()
+        location = (self.request.query_params.get("location") or "").strip()
+        service = (self.request.query_params.get("service") or "").strip()
+
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q)
+                | Q(description__icontains=q)
+                | Q(service__name__icontains=q)
+            )
+
+        if location:
+            qs = qs.filter(
+                Q(city__icontains=location)
+                | Q(address__icontains=location)
+                | Q(user__address__icontains=location)
+            )
+
+        if service:
+            if service.isdigit():
+                qs = qs.filter(service_id=int(service))
+            else:
+                qs = qs.filter(service__name__icontains=service)
+
+        return qs.order_by("-is_verified", "-average_rating", "name")
+
+
+# ----------------------------
+# Client / Employer profile
+# ----------------------------
 
 class EmployerProfile(APIView):
     permission_classes = [IsAuthenticated]
@@ -349,12 +511,16 @@ class EmployerUpdate(APIView):
     permission_classes = [IsAuthenticated]
 
     def put(self, request):
-        if not hasattr(request.user, "employer"):
-            raise PermissionDenied("Profil prestataire introuvable.")
-        serializer = EmployerUpdateSerializer(request.user.employer, data=request.data, partial=True)
+        serializer = EmployerProfileUpsertSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(EmployerSerializer(request.user.employer).data)
+        employer = serializer.save()
+        return Response(EmployerSerializer(employer).data)
+
+    def patch(self, request):
+        serializer = EmployerProfileUpsertSerializer(data=request.data, context={"request": request}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        employer = serializer.save()
+        return Response(EmployerSerializer(employer).data)
 
 
 class EmployerAvailability(APIView):
@@ -367,6 +533,39 @@ class EmployerAvailability(APIView):
         serializer = AvailabilitySerializer(employer.availabilities.all(), many=True)
         return Response(serializer.data)
 
+    def post(self, request, employer_id):
+        employer = Employer.objects.filter(pk=employer_id, is_active=True).first()
+        if not employer:
+            return Response({"detail": "Prestataire introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        # seul le prestataire lui-même (ou admin) peut modifier
+        if not (request.user.is_staff or (hasattr(request.user, "employer") and request.user.employer.id == employer.id)):
+            raise PermissionDenied("Non autorisé.")
+
+        incoming = request.data
+        items = incoming if isinstance(incoming, list) else incoming.get("availabilities", [])
+        if not isinstance(items, list):
+            return Response({"detail": "Format invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+        created = []
+        errors = []
+
+        for idx, item in enumerate(items):
+            ser = AvailabilitySerializer(data=item)
+            if ser.is_valid():
+                obj = Availability.objects.create(employer=employer, **ser.validated_data)
+                created.append(obj)
+            else:
+                errors.append({"index": idx, "errors": ser.errors})
+
+        if errors:
+            return Response(
+                {"detail": "Certaines disponibilités sont invalides.", "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(AvailabilitySerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
 
 class ClientProfile(APIView):
     permission_classes = [IsAuthenticated]
@@ -377,13 +576,51 @@ class ClientProfile(APIView):
         return Response(ClientSerializer(request.user.client).data)
 
     def put(self, request):
-        if not hasattr(request.user, "client"):
-            raise PermissionDenied("Profil client introuvable.")
-        serializer = ClientSerializer(request.user.client, data=request.data, partial=True)
+        serializer = ClientProfileUpsertSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        client = serializer.save()
+        return Response(ClientSerializer(client).data)
 
+    def patch(self, request):
+        serializer = ClientProfileUpsertSerializer(data=request.data, context={"request": request}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        client = serializer.save()
+        return Response(ClientSerializer(client).data)
+
+
+class CreateClientProfile(APIView):
+    """
+    Endpoint explicite pour créer le profil client si absent.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if hasattr(request.user, "client"):
+            return Response({"detail": "Profil client déjà existant."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ClientProfileUpsertSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        client = serializer.save()
+        return Response(ClientSerializer(client).data, status=status.HTTP_201_CREATED)
+
+
+class CreateEmployerProfile(APIView):
+    """
+    Endpoint explicite pour créer le profil prestataire si absent.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if hasattr(request.user, "employer"):
+            return Response({"detail": "Profil prestataire déjà existant."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = EmployerProfileUpsertSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        employer = serializer.save()
+        return Response(EmployerSerializer(employer).data, status=status.HTTP_201_CREATED)
+
+
+# ----------------------------
+# Appointments
+# ----------------------------
 
 class AppointmentList(ListAPIView):
     permission_classes = [IsAuthenticated]
@@ -427,8 +664,62 @@ class AppointmentDetail(RetrieveUpdateDestroyAPIView):
         return user_appointments_queryset(self.request.user)
 
     def perform_destroy(self, instance):
-        # client et prestataire peuvent annuler/supprimer leur rdv visible
-        instance.delete()
+        # Compatibilité endpoint DELETE : annulation non destructive
+        actor = "systeme"
+        if hasattr(self.request.user, "client") and instance.client_id == self.request.user.client.id:
+            actor = "client"
+        elif hasattr(self.request.user, "employer") and instance.employer_id == self.request.user.employer.id:
+            actor = "prestataire"
+        instance.cancel(by=actor, reason="Annulation via endpoint DELETE")
+
+
+class AppointmentCancelView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        appointment = Appointment.objects.select_related("client", "employer").filter(pk=pk).first()
+        if not appointment:
+            return Response({"detail": "Rendez-vous introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_access_appointment(request.user, appointment):
+            raise PermissionDenied("Non autorisé.")
+
+        if appointment.status == Appointment.Status.CANCELED:
+            return Response(AppointmentSerializer(appointment).data)
+
+        if hasattr(request.user, "client") and appointment.client_id == request.user.client.id:
+            by = "client"
+        elif hasattr(request.user, "employer") and appointment.employer_id == request.user.employer.id:
+            by = "prestataire"
+        else:
+            by = "systeme"
+
+        serializer = AppointmentCancelSerializer(
+            data=request.data,
+            context={"appointment": appointment, "canceled_by": by},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Notifications
+        if by == "client":
+            create_notification(
+                appointment.employer.user,
+                "appointment_canceled",
+                "Rendez-vous annulé",
+                f"Le client a annulé le rendez-vous du {appointment.date}.",
+                appointment,
+            )
+        elif by == "prestataire":
+            create_notification(
+                appointment.client.user,
+                "appointment_canceled",
+                "Rendez-vous annulé",
+                f"Le prestataire a annulé le rendez-vous du {appointment.date}.",
+                appointment,
+            )
+
+        return Response(AppointmentSerializer(appointment).data, status=status.HTTP_200_OK)
 
 
 class AppointmentReview(APIView):
@@ -438,10 +729,11 @@ class AppointmentReview(APIView):
         appointment = user_appointments_queryset(request.user).filter(pk=pk).first()
         if not appointment:
             return Response({"detail": "Rendez-vous introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
         if not hasattr(request.user, "client") or appointment.client != request.user.client:
             raise PermissionDenied("Seul le client concerné peut laisser un avis.")
 
-        serializer = AppointmentReviewSerializer(appointment, data=request.data, partial=True)
+        serializer = AppointmentReviewLegacySerializer(appointment, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(AppointmentSerializer(appointment).data)
@@ -450,6 +742,40 @@ class AppointmentReview(APIView):
 class AddReview(AppointmentReview):
     def put(self, request, pk):
         return self.post(request, pk)
+
+
+class ReviewListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Review.objects.select_related("client", "employer", "appointment").all().order_by("-created_at")
+        employer_id = request.query_params.get("employer_id")
+        if employer_id and employer_id.isdigit():
+            qs = qs.filter(employer_id=int(employer_id))
+        return Response(ReviewSerializer(qs, many=True).data)
+
+    def post(self, request):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Seul un client peut déposer un avis.")
+
+        serializer = ReviewSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        appointment = serializer.validated_data["appointment"]
+        if appointment.client_id != request.user.client.id:
+            raise PermissionDenied("Vous ne pouvez noter que vos propres rendez-vous.")
+
+        review, _created = Review.objects.update_or_create(
+            appointment=appointment,
+            defaults={
+                "client": request.user.client,
+                "employer": appointment.employer,
+                "rating": serializer.validated_data["rating"],
+                "comment": serializer.validated_data.get("comment", ""),
+                "is_published": serializer.validated_data.get("is_published", True),
+            },
+        )
+        return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)
 
 
 class AppointmentPayment(APIView):
@@ -468,9 +794,148 @@ class AppointmentPayment(APIView):
 
         appointment.payment_method = payment_method
         appointment.is_paid = True
-        appointment.save(update_fields=["payment_method", "is_paid"])
+        appointment.save(update_fields=["payment_method", "is_paid", "updated_at"])
         return Response(AppointmentSerializer(appointment).data)
 
+
+class ProcessPayment(AppointmentPayment):
+    def post(self, request, appointment_id):
+        return super().post(request, appointment_id)
+
+
+# ----------------------------
+# Favorites
+# ----------------------------
+
+class FavoriteServiceListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Profil client requis.")
+        qs = FavoriteService.objects.select_related("service", "client").filter(client=request.user.client)
+        return Response(FavoriteServiceSerializer(qs, many=True, context={"client": request.user.client}).data)
+
+    def post(self, request):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Profil client requis.")
+        serializer = FavoriteServiceSerializer(data=request.data, context={"client": request.user.client})
+        serializer.is_valid(raise_exception=True)
+        favorite = FavoriteService.objects.create(client=request.user.client, **serializer.validated_data)
+        return Response(FavoriteServiceSerializer(favorite, context={"client": request.user.client}).data, status=status.HTTP_201_CREATED)
+
+
+class FavoriteServiceDetail(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Profil client requis.")
+        fav = FavoriteService.objects.filter(pk=pk, client=request.user.client).first()
+        if not fav:
+            return Response({"detail": "Favori introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        fav.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FavoriteEmployerListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Profil client requis.")
+        qs = FavoriteEmployer.objects.select_related("employer", "client").filter(client=request.user.client)
+        return Response(FavoriteEmployerSerializer(qs, many=True, context={"client": request.user.client}).data)
+
+    def post(self, request):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Profil client requis.")
+        serializer = FavoriteEmployerSerializer(data=request.data, context={"client": request.user.client})
+        serializer.is_valid(raise_exception=True)
+        favorite = FavoriteEmployer.objects.create(client=request.user.client, **serializer.validated_data)
+        return Response(FavoriteEmployerSerializer(favorite, context={"client": request.user.client}).data, status=status.HTTP_201_CREATED)
+
+
+class FavoriteEmployerDetail(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not hasattr(request.user, "client"):
+            raise PermissionDenied("Profil client requis.")
+        fav = FavoriteEmployer.objects.filter(pk=pk, client=request.user.client).first()
+        if not fav:
+            return Response({"detail": "Favori introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        fav.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ----------------------------
+# Messaging
+# ----------------------------
+
+class ConversationListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Conversation.objects.select_related("client", "employer", "client__user", "employer__user").filter(
+            Q(client__user=request.user) | Q(employer__user=request.user)
+        ).order_by("-updated_at")
+        return Response(ConversationSerializer(qs, many=True).data)
+
+    def post(self, request):
+        serializer = ConversationCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        conversation = serializer.save()
+        return Response(ConversationSerializer(conversation).data, status=status.HTTP_201_CREATED)
+
+
+class MessageListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        conversation_id = request.query_params.get("conversation_id")
+        if not conversation_id or not conversation_id.isdigit():
+            return Response({"detail": "conversation_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+
+        conversation = Conversation.objects.filter(pk=int(conversation_id), is_active=True).first()
+        if not conversation:
+            return Response({"detail": "Conversation introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.id not in (conversation.client.user_id, conversation.employer.user_id):
+            raise PermissionDenied("Non autorisé.")
+
+        qs = Message.objects.select_related("sender_user", "conversation").filter(conversation=conversation).order_by("created_at")
+        return Response(MessageSerializer(qs, many=True).data)
+
+    def post(self, request):
+        serializer = MessageCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        msg = serializer.save()
+        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+
+# ----------------------------
+# Contact / claims
+# ----------------------------
+
+class ContactRequestCreate(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ContactRequestSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        payload = serializer.validated_data
+        if request.user and request.user.is_authenticated:
+            payload["user"] = request.user
+
+        contact = ContactRequest.objects.create(**payload)
+        return Response(ContactRequestSerializer(contact).data, status=status.HTTP_201_CREATED)
+
+
+# ----------------------------
+# Notifications
+# ----------------------------
 
 class NotificationList(ListAPIView):
     permission_classes = [IsAuthenticated]
@@ -490,8 +955,3 @@ class MarkNotificationRead(APIView):
         notif.is_read = True
         notif.save(update_fields=["is_read"])
         return Response({"message": "Notification lue."})
-
-
-class ProcessPayment(AppointmentPayment):
-    def post(self, request, appointment_id):
-        return super().post(request, appointment_id)

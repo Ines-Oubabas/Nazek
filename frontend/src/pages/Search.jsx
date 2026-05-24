@@ -1,79 +1,136 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Container,
-  Grid,
-  TextField,
-  Box,
-  Typography,
-  Button,
-  CircularProgress,
   Alert,
-  Paper,
-  Divider,
-  Stack,
-  InputAdornment,
-  Chip,
   Autocomplete,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Divider,
+  Grid,
+  InputAdornment,
+  MenuItem,
+  Paper,
+  Rating,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
 import {
   Search as SearchIcon,
   LocationOn as LocationIcon,
   RestartAlt as ResetIcon,
   Tune as TuneIcon,
+  Verified as VerifiedIcon,
+  Person as PersonIcon,
+  EventAvailable as EventAvailableIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+  Favorite as FavoriteIcon,
 } from "@mui/icons-material";
+import { alpha } from "@mui/material/styles";
 
-import { getServices, searchPlacesMapbox } from "../services/api";
-import ServiceCard from "../components/common/ServiceCard";
-
-const FAVORITES_KEY = "favorites_services";
+import {
+  getServices,
+  searchPlacesMapbox,
+  searchAPI,
+  favoritesAPI,
+} from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 const Search = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { isAuthenticated, isClient } = useAuth();
 
-  const [allServices, setAllServices] = useState([]);
+  const [services, setServices] = useState([]);
+  const [employers, setEmployers] = useState([]);
+
+  const [favorites, setFavorites] = useState([]); // [{id, employer:{id,...}}]
+  const favoriteEmployerIds = useMemo(
+    () => new Set(favorites.map((f) => f?.employer?.id).filter(Boolean)),
+    [favorites]
+  );
+
   const [loading, setLoading] = useState(true);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
   const [error, setError] = useState("");
 
   const [locationOptions, setLocationOptions] = useState([]);
   const [locationLoading, setLocationLoading] = useState(false);
 
   const [filters, setFilters] = useState({
-    query: searchParams.get("q") || "",
+    q: searchParams.get("q") || "",
     location: searchParams.get("location") || "",
+    service: searchParams.get("service") || "",
   });
 
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      const raw = localStorage.getItem(FAVORITES_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+  const selectedServiceId = useMemo(() => {
+    if (!filters.service) return "";
+    if (/^\d+$/.test(String(filters.service))) return String(filters.service);
+    const found = services.find(
+      (s) => s.name?.toLowerCase() === String(filters.service).toLowerCase()
+    );
+    return found ? String(found.id) : "";
+  }, [filters.service, services]);
+
+  const loadServices = async () => {
+    const data = await getServices();
+    const list = Array.isArray(data) ? data : data?.results ?? [];
+    setServices(list);
+  };
+
+  const loadEmployers = async (params = {}) => {
+    const data = await searchAPI.employers(params);
+    const list = Array.isArray(data) ? data : data?.results ?? [];
+    setEmployers(list);
+  };
+
+  const loadFavorites = async () => {
+    if (!isAuthenticated || !isClient) {
+      setFavorites([]);
+      return;
     }
-  });
+    setLoadingFavorites(true);
+    try {
+      const data = await favoritesAPI.listEmployers();
+      const list = Array.isArray(data) ? data : data?.results ?? [];
+      setFavorites(list);
+    } catch {
+      // Non bloquant pour la recherche
+      setFavorites([]);
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchServices = async () => {
+    const init = async () => {
+      setLoading(true);
+      setError("");
       try {
-        setLoading(true);
-        setError("");
-        const data = await getServices();
-        const list = Array.isArray(data) ? data : data?.results ?? [];
-        setAllServices(list);
+        await Promise.all([
+          loadServices(),
+          loadEmployers({
+            q: filters.q || undefined,
+            location: filters.location || undefined,
+            service: filters.service || undefined,
+          }),
+          loadFavorites(),
+        ]);
       } catch (err) {
-        setError(err.message || "Erreur de chargement des services.");
+        setError(err?.message || "Erreur de chargement.");
       } finally {
         setLoading(false);
       }
     };
-    fetchServices();
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-  }, [favorites]);
 
   useEffect(() => {
     const run = async () => {
@@ -82,6 +139,7 @@ const Search = () => {
         setLocationOptions([]);
         return;
       }
+
       try {
         setLocationLoading(true);
         const results = await searchPlacesMapbox(q);
@@ -95,39 +153,78 @@ const Search = () => {
     return () => clearTimeout(timer);
   }, [filters.location]);
 
-  const filteredServices = useMemo(() => {
-    const q = (filters.query || "").trim().toLowerCase();
-    const loc = (filters.location || "").trim().toLowerCase();
-
-    return allServices.filter((s) => {
-      const hay = `${s?.name ?? ""} ${s?.description ?? ""}`.toLowerCase();
-      if (q && !hay.includes(q)) return false;
-
-      if (loc) {
-        const hayLoc = `${s?.location ?? ""} ${s?.city ?? ""} ${s?.address ?? ""}`.toLowerCase();
-        if (hayLoc && !hayLoc.includes(loc)) return false;
-      }
-
-      return true;
-    });
-  }, [allServices, filters]);
-
-  const handleReset = () => {
-    setFilters({ query: "", location: "" });
+  const handleReset = async () => {
+    setFilters({ q: "", location: "", service: "" });
+    setError("");
     navigate("/search");
+    setLoading(true);
+    try {
+      await loadEmployers({});
+    } catch (err) {
+      setError(err?.message || "Erreur de recherche.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSearchSubmit = (e) => {
+  const handleSearchSubmit = async (e) => {
     e.preventDefault();
-    const q = encodeURIComponent(filters.query || "");
-    const loc = encodeURIComponent(filters.location || "");
-    navigate(`/search?q=${q}&location=${loc}`);
+    setError("");
+    setLoading(true);
+
+    const params = {
+      q: filters.q || undefined,
+      location: filters.location || undefined,
+      service: selectedServiceId || filters.service || undefined,
+    };
+
+    const query = new URLSearchParams();
+    if (filters.q) query.set("q", filters.q);
+    if (filters.location) query.set("location", filters.location);
+    if (selectedServiceId) query.set("service", selectedServiceId);
+    else if (filters.service) query.set("service", filters.service);
+    navigate(`/search${query.toString() ? `?${query.toString()}` : ""}`);
+
+    try {
+      await loadEmployers(params);
+    } catch (err) {
+      setError(err?.message || "Erreur de recherche.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleFavorite = (serviceId) => {
-    setFavorites((prev) =>
-      prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
-    );
+  const handleToggleFavorite = async (employer) => {
+    if (!isAuthenticated || !isClient) {
+      setError("Connectez-vous avec un compte client pour gérer les favoris.");
+      return;
+    }
+
+    try {
+      setError("");
+      const existing = favorites.find((f) => f?.employer?.id === employer.id);
+
+      if (existing) {
+        await favoritesAPI.removeEmployer(existing.id);
+        setFavorites((prev) => prev.filter((f) => f.id !== existing.id));
+      } else {
+        const created = await favoritesAPI.addEmployer(employer.id);
+        setFavorites((prev) => [created, ...prev]);
+      }
+    } catch (err) {
+      setError(err?.message || "Impossible de mettre à jour les favoris.");
+    }
+  };
+
+  const getServiceLabel = (employer) => {
+    const serviceName = employer?.service?.name;
+    if (serviceName) return serviceName;
+    const serviceId = employer?.service;
+    if (typeof serviceId === "number") {
+      const srv = services.find((s) => s.id === serviceId);
+      return srv?.name || "Service non précisé";
+    }
+    return "Service non précisé";
   };
 
   return (
@@ -137,7 +234,8 @@ const Search = () => {
           p: { xs: 2, md: 3 },
           mb: 2.5,
           borderRadius: 4,
-          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.18), transparent 40%), #171b22",
+          background:
+            "radial-gradient(circle at 10% -30%, rgba(243,139,42,.18), transparent 40%), #171b22",
         }}
       >
         <Stack
@@ -148,28 +246,30 @@ const Search = () => {
           sx={{ mb: 2 }}
         >
           <Box>
-            <Chip icon={<TuneIcon />} label="Recherche intelligente" color="primary" sx={{ mb: 1 }} />
+            <Chip icon={<TuneIcon />} label="Recherche prestataires" color="primary" sx={{ mb: 1 }} />
             <Typography variant="h4" sx={{ fontWeight: 800 }}>
-              Explorer les services
+              Trouver un prestataire
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Filtrez, comparez et trouvez rapidement le bon prestataire.
+              Recherchez par nom, service, description ou localisation.
             </Typography>
           </Box>
 
-          <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleReset}>
-            Réinitialiser
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleReset}>
+              Réinitialiser
+            </Button>
+          </Stack>
         </Stack>
 
         <form onSubmit={handleSearchSubmit}>
           <Grid container spacing={1.5} alignItems="center">
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                placeholder="Que recherchez-vous ?"
-                value={filters.query}
-                onChange={(e) => setFilters((p) => ({ ...p, query: e.target.value }))}
+                placeholder="Nom, service, description..."
+                value={filters.q}
+                onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -180,7 +280,29 @@ const Search = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={3}>
+              <TextField
+                select
+                fullWidth
+                value={selectedServiceId}
+                onChange={(e) =>
+                  setFilters((p) => ({
+                    ...p,
+                    service: e.target.value,
+                  }))
+                }
+                placeholder="Service"
+              >
+                <MenuItem value="">Tous les services</MenuItem>
+                {services.map((srv) => (
+                  <MenuItem key={srv.id} value={String(srv.id)}>
+                    {srv.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} md={3}>
               <Autocomplete
                 freeSolo
                 options={locationOptions}
@@ -190,7 +312,7 @@ const Search = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    placeholder="Ville / Adresse (Mapbox)"
+                    placeholder="Ville / Adresse"
                     InputProps={{
                       ...params.InputProps,
                       startAdornment: (
@@ -216,26 +338,181 @@ const Search = () => {
       {loading ? (
         <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
           <CircularProgress />
+          <Typography sx={{ mt: 1.2 }} color="text.secondary">
+            Recherche en cours...
+          </Typography>
         </Paper>
       ) : error ? (
         <Alert severity="error">{error}</Alert>
-      ) : filteredServices.length === 0 ? (
+      ) : employers.length === 0 ? (
         <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
-          <Typography>Aucun service trouvé.</Typography>
+          <Typography variant="h6" sx={{ mb: 0.8 }}>
+            Aucun prestataire trouvé
+          </Typography>
+          <Typography color="text.secondary">
+            Essayez d’élargir vos critères (service, ville, nom).
+          </Typography>
         </Paper>
       ) : (
         <>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            sx={{ mb: 1.2 }}
+          >
+            <Typography color="text.secondary">
+              {employers.length} prestataire{employers.length > 1 ? "s" : ""} trouvé
+              {employers.length > 1 ? "s" : ""}.
+            </Typography>
+            {loadingFavorites && isAuthenticated && isClient && (
+              <Typography variant="caption" color="text.secondary">
+                Mise à jour des favoris...
+              </Typography>
+            )}
+          </Stack>
+
           <Divider sx={{ mb: 2 }} />
+
           <Grid container spacing={2}>
-            {filteredServices.map((service) => (
-              <Grid item xs={12} sm={6} md={4} key={service.id}>
-                <ServiceCard
-                  service={service}
-                  isFavorite={favorites.includes(service.id)}
-                  onToggleFavorite={() => toggleFavorite(service.id)}
-                />
-              </Grid>
-            ))}
+            {employers.map((employer) => {
+              const isFav = favoriteEmployerIds.has(employer.id);
+              const serviceLabel = getServiceLabel(employer);
+
+              return (
+                <Grid item xs={12} sm={6} lg={4} key={employer.id}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      borderRadius: 3,
+                      backgroundColor: alpha("#171b22", 0.95),
+                      border: "1px solid",
+                      borderColor: "divider",
+                      transition: "transform .2s ease, box-shadow .2s ease",
+                      "&:hover": {
+                        transform: "translateY(-3px)",
+                        boxShadow: "0 16px 30px rgba(0,0,0,.32)",
+                      },
+                    }}
+                  >
+                    <CardContent>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                        <Box>
+                          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.4 }}>
+                            <PersonIcon fontSize="small" sx={{ color: "primary.main" }} />
+                            <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                              {employer.name || "Prestataire"}
+                            </Typography>
+                          </Stack>
+
+                          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
+                            <Chip size="small" label={serviceLabel} variant="outlined" />
+                            {employer.is_verified && (
+                              <Chip
+                                size="small"
+                                color="success"
+                                icon={<VerifiedIcon />}
+                                label="Vérifié"
+                              />
+                            )}
+                          </Stack>
+                        </Box>
+                      </Stack>
+
+                      <Stack spacing={1.1}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Localisation
+                          </Typography>
+                          <Typography variant="body2">
+                            {employer.city || employer.address || "Non renseignée"}
+                          </Typography>
+                        </Box>
+
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Description
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {employer.description || "Aucune description disponible."}
+                          </Typography>
+                        </Box>
+
+                        <Stack direction="row" spacing={2} alignItems="center" sx={{ pt: 0.5 }}>
+                          <Stack direction="row" alignItems="center" spacing={0.7}>
+                            <Rating
+                              value={Number(employer.average_rating || 0)}
+                              precision={0.1}
+                              readOnly
+                              size="small"
+                            />
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {Number(employer.average_rating || 0).toFixed(1)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              ({employer.total_reviews || 0})
+                            </Typography>
+                          </Stack>
+                        </Stack>
+
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Tarif horaire
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {employer.hourly_rate ? `${employer.hourly_rate} DA/h` : "Non renseigné"}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </CardContent>
+
+                    <CardActions sx={{ p: 2, pt: 0, display: "flex", gap: 1, flexWrap: "wrap" }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => navigate(`/employers/${employer.id}`)}
+                      >
+                        Voir détail
+                      </Button>
+
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<EventAvailableIcon />}
+                        onClick={() =>
+                          navigate(
+                            `/appointments?employerId=${employer.id}&serviceId=${
+                              employer?.service?.id || employer?.service || ""
+                            }`
+                          )
+                        }
+                      >
+                        Rendez-vous
+                      </Button>
+
+                      <Button
+                        size="small"
+                        variant={isFav ? "contained" : "outlined"}
+                        color={isFav ? "error" : "primary"}
+                        startIcon={isFav ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                        onClick={() => handleToggleFavorite(employer)}
+                        disabled={!isAuthenticated || !isClient}
+                      >
+                        {isFav ? "Retirer favori" : "Ajouter favori"}
+                      </Button>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              );
+            })}
           </Grid>
         </>
       )}

@@ -1,300 +1,684 @@
 import React, { useMemo, useState } from "react";
 import {
-  Container,
-  Paper,
-  Typography,
-  Box,
-  Grid,
-  TextField,
-  Button,
   Alert,
-  Divider,
   Avatar,
-  Stack,
+  Box,
+  Button,
   Chip,
+  Container,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Divider,
+  Grid,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
+import {
+  Person as PersonIcon,
+  BusinessCenter as BusinessIcon,
+  Save as SaveIcon,
+  LockReset as LockResetIcon,
+  DeleteForever as DeleteIcon,
+  AddCircleOutline as AddIcon,
+} from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
-import { apiRequest, AUTH_URLS, CHANGE_PASSWORD_URL, userAPI } from "../services/api";
+import { userAPI } from "../services/api";
 
 const Profile = () => {
-  const { user, refreshUser, logout, deleteAccount, isEmployer } = useAuth();
+  const navigate = useNavigate();
+  const {
+    user,
+    clientProfile,
+    employerProfile,
+    isClient,
+    isEmployer,
+    updateUser,
+    refreshUser,
+    deleteAccount,
+  } = useAuth();
 
-  const [formData, setFormData] = useState({
-    firstName: user?.first_name || "",
-    lastName: user?.last_name || "",
+  const [tab, setTab] = useState("user");
+
+  const [userForm, setUserForm] = useState({
+    first_name: user?.first_name || "",
+    last_name: user?.last_name || "",
     email: user?.email || "",
     phone: user?.phone || "",
     address: user?.address || "",
-    description: "",
-    hourly_rate: "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
   });
 
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
-  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [clientForm, setClientForm] = useState({
+    name: clientProfile?.name || "",
+    email: clientProfile?.email || user?.email || "",
+    phone: clientProfile?.phone || user?.phone || "",
+    address: clientProfile?.address || user?.address || "",
+    city: clientProfile?.city || "",
+  });
+
+  const [employerForm, setEmployerForm] = useState({
+    name: employerProfile?.name || "",
+    email: employerProfile?.email || user?.email || "",
+    phone: employerProfile?.phone || user?.phone || "",
+    description: employerProfile?.description || "",
+    city: employerProfile?.city || "",
+    address: employerProfile?.address || user?.address || "",
+    hourly_rate:
+      employerProfile?.hourly_rate !== null && employerProfile?.hourly_rate !== undefined
+        ? String(employerProfile.hourly_rate)
+        : "",
+  });
+
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: "",
+  });
+
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [loadingClient, setLoadingClient] = useState(false);
+  const [loadingEmployer, setLoadingEmployer] = useState(false);
   const [loadingPassword, setLoadingPassword] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
-  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
 
-  const displayName = useMemo(() => {
-    const full = `${formData.firstName} ${formData.lastName}`.trim();
-    return full || user?.username || "Utilisateur";
-  }, [formData.firstName, formData.lastName, user?.username]);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
+
+  const initials = useMemo(() => {
+    const full = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
+    if (full) return full.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+    return (user?.username || "U").slice(0, 2).toUpperCase();
+  }, [user]);
+
+  const resetMessages = () => {
+    setSuccessMsg("");
+    setErrorMsg("");
   };
 
-  const handleProfileUpdate = async (e) => {
+  const handleUserField = (key, value) => {
+    setUserForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleClientField = (key, value) => {
+    setClientForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleEmployerField = (key, value) => {
+    setEmployerForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handlePasswordField = (key, value) => {
+    setPasswordForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const submitUserUpdate = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
-    setLoadingProfile(true);
+    resetMessages();
+    setLoadingUser(true);
 
     try {
-      await apiRequest(AUTH_URLS.USER, {
-        method: "PATCH",
-        data: {
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: formData.phone,
-          address: formData.address,
-        },
+      await updateUser({
+        first_name: userForm.first_name,
+        last_name: userForm.last_name,
+        email: userForm.email,
+        phone: userForm.phone,
+        address: userForm.address,
       });
-
-      if (isEmployer) {
-        await userAPI.updateProfile({
-          description: formData.description,
-          hourly_rate: formData.hourly_rate,
-          phone: formData.phone,
-        });
-      }
-
-      await refreshUser?.();
-      setSuccess("Profil mis à jour avec succès.");
+      await refreshUser();
+      setSuccessMsg("Profil utilisateur mis à jour avec succès.");
     } catch (err) {
-      setError(err.message || "Erreur lors de la mise à jour du profil.");
+      setErrorMsg(err?.message || "Impossible de mettre à jour le profil utilisateur.");
     } finally {
-      setLoadingProfile(false);
+      setLoadingUser(false);
     }
   };
 
-  const handlePasswordChange = async (e) => {
+  const submitClientProfile = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    resetMessages();
+    setLoadingClient(true);
 
-    if (formData.newPassword !== formData.confirmPassword) {
-      setError("Les nouveaux mots de passe ne correspondent pas.");
+    try {
+      if (clientProfile) {
+        await userAPI.updateProfile({
+          name: clientForm.name,
+          email: clientForm.email,
+          phone: clientForm.phone,
+          address: clientForm.address,
+          city: clientForm.city,
+        });
+      } else {
+        await userAPI.createClientProfile({
+          name: clientForm.name,
+          email: clientForm.email,
+          phone: clientForm.phone,
+          address: clientForm.address,
+          city: clientForm.city,
+        });
+      }
+
+      await refreshUser();
+      setSuccessMsg(clientProfile ? "Profil client mis à jour." : "Profil client créé avec succès.");
+    } catch (err) {
+      setErrorMsg(err?.message || "Impossible de sauvegarder le profil client.");
+    } finally {
+      setLoadingClient(false);
+    }
+  };
+
+  const submitEmployerProfile = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    setLoadingEmployer(true);
+
+    try {
+      const payload = {
+        name: employerForm.name,
+        email: employerForm.email,
+        phone: employerForm.phone,
+        description: employerForm.description,
+        city: employerForm.city,
+        address: employerForm.address,
+        hourly_rate: employerForm.hourly_rate === "" ? null : Number(employerForm.hourly_rate),
+      };
+
+      if (employerProfile) {
+        await userAPI.updateProfile(payload);
+      } else {
+        await userAPI.createEmployerProfile(payload);
+      }
+
+      await refreshUser();
+      setSuccessMsg(employerProfile ? "Profil prestataire mis à jour." : "Profil prestataire créé avec succès.");
+    } catch (err) {
+      setErrorMsg(err?.message || "Impossible de sauvegarder le profil prestataire.");
+    } finally {
+      setLoadingEmployer(false);
+    }
+  };
+
+  const submitPasswordChange = async (e) => {
+    e.preventDefault();
+    resetMessages();
+
+    if (!passwordForm.current_password || !passwordForm.new_password) {
+      setErrorMsg("Veuillez renseigner l’ancien et le nouveau mot de passe.");
+      return;
+    }
+    if (
+      passwordForm.confirm_password &&
+      passwordForm.new_password !== passwordForm.confirm_password
+    ) {
+      setErrorMsg("La confirmation du mot de passe ne correspond pas.");
       return;
     }
 
     setLoadingPassword(true);
     try {
-      await apiRequest(CHANGE_PASSWORD_URL, {
-        method: "POST",
-        data: {
-          current_password: formData.currentPassword,
-          new_password: formData.newPassword,
-        },
+      await userAPI.changePassword({
+        current_password: passwordForm.current_password,
+        new_password: passwordForm.new_password,
+        confirm_password: passwordForm.confirm_password,
       });
 
-      setSuccess("Mot de passe modifié avec succès.");
-      setFormData((prev) => ({
-        ...prev,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      }));
+      setPasswordForm({
+        current_password: "",
+        new_password: "",
+        confirm_password: "",
+      });
+      setSuccessMsg("Mot de passe modifié avec succès.");
     } catch (err) {
-      setError(err.message || "Impossible de changer le mot de passe.");
+      setErrorMsg(err?.message || "Impossible de modifier le mot de passe.");
     } finally {
       setLoadingPassword(false);
     }
   };
 
   const confirmDeleteAccount = async () => {
-    setError("");
-    setSuccess("");
+    resetMessages();
     setLoadingDelete(true);
-
     try {
       await deleteAccount();
-      setOpenDeleteDialog(false);
-      await logout();
+      setOpenDeleteConfirm(false);
+      navigate("/login", { replace: true });
     } catch (err) {
-      setError(err.message || "Suppression de compte impossible.");
+      setErrorMsg(err?.message || "Impossible de supprimer le compte.");
     } finally {
       setLoadingDelete(false);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 2 }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
       <Paper
         sx={{
           p: { xs: 2, md: 3 },
           borderRadius: 4,
-          mb: 2.2,
-          background: "radial-gradient(circle at 10% -30%, rgba(243,139,42,.14), transparent 38%), #171b22",
+          background:
+            "radial-gradient(circle at 10% -30%, rgba(243,139,42,.18), transparent 40%), #171b22",
         }}
       >
-        <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "flex-start", md: "center" }}>
-          <Avatar
-            sx={{
-              width: 78,
-              height: 78,
-              bgcolor: alpha("#f38b2a", 0.2),
-              color: "primary.main",
-              border: "1px solid",
-              borderColor: "divider",
-            }}
-          >
-            {displayName?.[0]?.toUpperCase()}
-          </Avatar>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems={{ xs: "flex-start", md: "center" }}
+          justifyContent="space-between"
+          sx={{ mb: 2.5 }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Avatar
+              sx={{
+                bgcolor: alpha("#f38b2a", 0.25),
+                color: "#ffd9b0",
+                border: "1px solid",
+                borderColor: "divider",
+                width: 56,
+                height: 56,
+                fontWeight: 800,
+              }}
+            >
+              {initials}
+            </Avatar>
 
-          <Box>
-            <Chip icon={<PersonOutlineIcon />} label={isEmployer ? "Compte professionnel" : "Compte client"} color="primary" sx={{ mb: 1 }} />
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>{displayName}</Typography>
-            <Typography color="text.secondary">{formData.email || "—"}</Typography>
-          </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Mon profil
+              </Typography>
+              <Typography color="text.secondary">
+                Gérez vos informations, vos profils et la sécurité de votre compte.
+              </Typography>
+            </Box>
+          </Stack>
 
-          <Stack direction="row" spacing={1} sx={{ ml: { md: "auto" } }}>
-            <Chip icon={<VerifiedUserIcon />} label="Compte vérifié" variant="outlined" />
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Chip
+              icon={<PersonIcon />}
+              label={isClient ? "Compte client actif" : "Compte client inactif"}
+              color={isClient ? "success" : "default"}
+              variant={isClient ? "filled" : "outlined"}
+            />
+            <Chip
+              icon={<BusinessIcon />}
+              label={isEmployer ? "Compte prestataire actif" : "Compte prestataire inactif"}
+              color={isEmployer ? "success" : "default"}
+              variant={isEmployer ? "filled" : "outlined"}
+            />
           </Stack>
         </Stack>
-      </Paper>
 
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {successMsg && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {successMsg}
+          </Alert>
+        )}
+        {errorMsg && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {errorMsg}
+          </Alert>
+        )}
 
-      <Grid container spacing={2.2}>
-        <Grid item xs={12} md={7}>
-          <Paper sx={{ p: 2.4, borderRadius: 3.5, height: "100%" }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-              <PersonOutlineIcon sx={{ color: "primary.main" }} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>Informations personnelles</Typography>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
+          <Button
+            variant={tab === "user" ? "contained" : "outlined"}
+            onClick={() => setTab("user")}
+          >
+            Utilisateur
+          </Button>
+          <Button
+            variant={tab === "client" ? "contained" : "outlined"}
+            onClick={() => setTab("client")}
+          >
+            Profil client
+          </Button>
+          <Button
+            variant={tab === "employer" ? "contained" : "outlined"}
+            onClick={() => setTab("employer")}
+          >
+            Profil prestataire
+          </Button>
+          <Button
+            variant={tab === "security" ? "contained" : "outlined"}
+            onClick={() => setTab("security")}
+          >
+            Sécurité
+          </Button>
+        </Stack>
+
+        <Divider sx={{ mb: 2.5 }} />
+
+        {tab === "user" && (
+          <Box component="form" onSubmit={submitUserUpdate}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Prénom"
+                  fullWidth
+                  value={userForm.first_name}
+                  onChange={(e) => handleUserField("first_name", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Nom"
+                  fullWidth
+                  value={userForm.last_name}
+                  onChange={(e) => handleUserField("last_name", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Email"
+                  type="email"
+                  fullWidth
+                  value={userForm.email}
+                  onChange={(e) => handleUserField("email", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Téléphone"
+                  fullWidth
+                  value={userForm.phone}
+                  onChange={(e) => handleUserField("phone", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Adresse"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  value={userForm.address}
+                  onChange={(e) => handleUserField("address", e.target.value)}
+                />
+              </Grid>
+            </Grid>
+
+            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<SaveIcon />}
+                disabled={loadingUser}
+              >
+                {loadingUser ? "Enregistrement..." : "Enregistrer"}
+              </Button>
             </Stack>
+          </Box>
+        )}
 
-            <Box component="form" onSubmit={handleProfileUpdate}>
-              <Grid container spacing={1.4}>
-                <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Prénom" name="firstName" value={formData.firstName} onChange={handleChange} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Nom" name="lastName" value={formData.lastName} onChange={handleChange} />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField fullWidth label="Email" type="email" name="email" value={formData.email} disabled />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField fullWidth label="Téléphone" name="phone" value={formData.phone} onChange={handleChange} />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField fullWidth label="Adresse" name="address" value={formData.address} onChange={handleChange} />
-                </Grid>
+        {tab === "client" && (
+          <Box component="form" onSubmit={submitClientProfile}>
+            {!clientProfile && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Vous n’avez pas encore de profil client. Complétez le formulaire pour le créer.
+              </Alert>
+            )}
 
-                {isEmployer && (
-                  <>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        label="Description de votre service"
-                        name="description"
-                        value={formData.description}
-                        onChange={handleChange}
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField fullWidth label="Tarif horaire" name="hourly_rate" value={formData.hourly_rate} onChange={handleChange} />
-                    </Grid>
-                  </>
-                )}
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Nom complet client"
+                  fullWidth
+                  value={clientForm.name}
+                  onChange={(e) => handleClientField("name", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Email client"
+                  type="email"
+                  fullWidth
+                  value={clientForm.email}
+                  onChange={(e) => handleClientField("email", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Téléphone client"
+                  fullWidth
+                  value={clientForm.phone}
+                  onChange={(e) => handleClientField("phone", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Ville"
+                  fullWidth
+                  value={clientForm.city}
+                  onChange={(e) => handleClientField("city", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Adresse client"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  value={clientForm.address}
+                  onChange={(e) => handleClientField("address", e.target.value)}
+                />
+              </Grid>
+            </Grid>
 
-                <Grid item xs={12}>
-                  <Button type="submit" variant="contained" disabled={loadingProfile}>
-                    {loadingProfile ? "Mise à jour..." : "Mettre à jour le profil"}
-                  </Button>
+            <Stack direction="row" justifyContent="space-between" sx={{ mt: 2 }}>
+              {!clientProfile ? (
+                <Chip icon={<AddIcon />} color="warning" label="Création d’un nouveau profil client" />
+              ) : (
+                <Chip icon={<PersonIcon />} color="success" label="Profil client existant" />
+              )}
+
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<SaveIcon />}
+                disabled={loadingClient}
+              >
+                {loadingClient
+                  ? "Enregistrement..."
+                  : clientProfile
+                  ? "Mettre à jour"
+                  : "Créer le profil client"}
+              </Button>
+            </Stack>
+          </Box>
+        )}
+
+        {tab === "employer" && (
+          <Box component="form" onSubmit={submitEmployerProfile}>
+            {!employerProfile && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Vous n’avez pas encore de profil prestataire. Complétez le formulaire pour le créer.
+              </Alert>
+            )}
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Nom prestataire"
+                  fullWidth
+                  value={employerForm.name}
+                  onChange={(e) => handleEmployerField("name", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Email prestataire"
+                  type="email"
+                  fullWidth
+                  value={employerForm.email}
+                  onChange={(e) => handleEmployerField("email", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Téléphone prestataire"
+                  fullWidth
+                  value={employerForm.phone}
+                  onChange={(e) => handleEmployerField("phone", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Tarif horaire"
+                  type="number"
+                  fullWidth
+                  value={employerForm.hourly_rate}
+                  onChange={(e) => handleEmployerField("hourly_rate", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Ville"
+                  fullWidth
+                  value={employerForm.city}
+                  onChange={(e) => handleEmployerField("city", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Adresse prestataire"
+                  fullWidth
+                  value={employerForm.address}
+                  onChange={(e) => handleEmployerField("address", e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Description"
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  value={employerForm.description}
+                  onChange={(e) => handleEmployerField("description", e.target.value)}
+                />
+              </Grid>
+            </Grid>
+
+            <Stack direction="row" justifyContent="space-between" sx={{ mt: 2 }}>
+              {!employerProfile ? (
+                <Chip
+                  icon={<AddIcon />}
+                  color="warning"
+                  label="Création d’un nouveau profil prestataire"
+                />
+              ) : (
+                <Chip icon={<BusinessIcon />} color="success" label="Profil prestataire existant" />
+              )}
+
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<SaveIcon />}
+                disabled={loadingEmployer}
+              >
+                {loadingEmployer
+                  ? "Enregistrement..."
+                  : employerProfile
+                  ? "Mettre à jour"
+                  : "Créer le profil prestataire"}
+              </Button>
+            </Stack>
+          </Box>
+        )}
+
+        {tab === "security" && (
+          <Stack spacing={3}>
+            <Box component="form" onSubmit={submitPasswordChange}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5 }}>
+                Changer le mot de passe
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    label="Mot de passe actuel"
+                    type="password"
+                    fullWidth
+                    value={passwordForm.current_password}
+                    onChange={(e) => handlePasswordField("current_password", e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    label="Nouveau mot de passe"
+                    type="password"
+                    fullWidth
+                    value={passwordForm.new_password}
+                    onChange={(e) => handlePasswordField("new_password", e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    label="Confirmer le nouveau mot de passe"
+                    type="password"
+                    fullWidth
+                    value={passwordForm.confirm_password}
+                    onChange={(e) => handlePasswordField("confirm_password", e.target.value)}
+                  />
                 </Grid>
               </Grid>
-            </Box>
-          </Paper>
-        </Grid>
 
-        <Grid item xs={12} md={5}>
-          <Paper sx={{ p: 2.4, borderRadius: 3.5 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-              <LockOutlinedIcon sx={{ color: "primary.main" }} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>Sécurité du compte</Typography>
-            </Stack>
-
-            <Box component="form" onSubmit={handlePasswordChange}>
-              <Stack spacing={1.4}>
-                <TextField fullWidth label="Mot de passe actuel" type="password" name="currentPassword" value={formData.currentPassword} onChange={handleChange} />
-                <TextField fullWidth label="Nouveau mot de passe" type="password" name="newPassword" value={formData.newPassword} onChange={handleChange} />
-                <TextField fullWidth label="Confirmer le nouveau mot de passe" type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} />
-
-                <Button type="submit" variant="contained" disabled={loadingPassword}>
-                  {loadingPassword ? "Mise à jour..." : "Changer le mot de passe"}
+              <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="warning"
+                  startIcon={<LockResetIcon />}
+                  disabled={loadingPassword}
+                >
+                  {loadingPassword ? "Mise à jour..." : "Mettre à jour le mot de passe"}
                 </Button>
               </Stack>
             </Box>
 
-            <Divider sx={{ my: 2.2 }} />
+            <Divider />
 
-            <Box
-              sx={{
-                p: 1.4,
-                borderRadius: 2,
-                border: "1px dashed",
-                borderColor: "divider",
-                bgcolor: alpha("#ff6f78", 0.06),
-              }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-                <WarningAmberIcon color="error" />
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Zone sensible</Typography>
-              </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.2 }}>
-                Vous pouvez quitter la plateforme à tout moment en supprimant définitivement votre compte et vos données.
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+                Zone de danger
               </Typography>
-              <Button variant="outlined" color="error" onClick={() => setOpenDeleteDialog(true)}>
+              <Typography color="text.secondary" sx={{ mb: 2 }}>
+                Cette action est irréversible. Toutes vos données associées seront supprimées.
+              </Typography>
+
+              <Button
+                color="error"
+                variant="contained"
+                startIcon={<DeleteIcon />}
+                onClick={() => setOpenDeleteConfirm(true)}
+              >
                 Supprimer mon compte
               </Button>
-              <Button variant="text" sx={{ ml: 1 }} onClick={logout}>
-                Se déconnecter
-              </Button>
             </Box>
-          </Paper>
-        </Grid>
-      </Grid>
+          </Stack>
+        )}
+      </Paper>
 
-      <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
+      <Dialog open={openDeleteConfirm} onClose={() => setOpenDeleteConfirm(false)}>
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
-          <Typography>
-            Cette action est irréversible. Voulez-vous vraiment supprimer votre compte et toutes vos données ?
-          </Typography>
+          <DialogContentText>
+            Êtes-vous sûr de vouloir supprimer définitivement votre compte ?
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDeleteDialog(false)}>Annuler</Button>
-          <Button color="error" variant="contained" onClick={confirmDeleteAccount} disabled={loadingDelete}>
+          <Button onClick={() => setOpenDeleteConfirm(false)}>Annuler</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={confirmDeleteAccount}
+            disabled={loadingDelete}
+          >
             {loadingDelete ? "Suppression..." : "Oui, supprimer"}
           </Button>
         </DialogActions>

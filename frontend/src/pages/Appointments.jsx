@@ -1,158 +1,298 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Container,
-  Typography,
-  Paper,
-  Box,
-  CircularProgress,
   Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  MenuItem,
+  Paper,
+  Rating,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  Button,
-  Stack,
-  Chip,
-  Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
+  Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { useNavigate, useLocation } from "react-router-dom";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  CalendarToday as CalendarIcon,
-  Autorenew as RefreshIcon,
   AddCircleOutline as AddIcon,
-  CheckCircle as CheckCircleIcon,
-  PendingActions as PendingActionsIcon,
-  EventNote as EventNoteIcon,
+  EventBusy as CancelIcon,
+  EventAvailable as EventIcon,
+  Refresh as RefreshIcon,
+  Star as StarIcon,
+  Payment as PaymentIcon,
 } from "@mui/icons-material";
 
-import { appointmentAPI } from "../services/api";
+import { appointmentAPI, employerAPI, getServices } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
-const toDateLabel = (raw) => {
-  if (!raw) return "—";
-  try {
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return String(raw);
-    return format(d, "dd/MM/yyyy HH:mm", { locale: fr });
-  } catch {
-    return String(raw);
-  }
+const statusLabelMap = {
+  en_attente: "En attente",
+  "accepté": "Accepté",
+  "refusé": "Refusé",
+  en_cours: "En cours",
+  "terminé": "Terminé",
+  "annulé": "Annulé",
 };
 
-const statusColor = (status) => {
-  const s = String(status || "").toLowerCase();
-  if (s.includes("accept")) return "success";
-  if (s.includes("refus")) return "error";
-  if (s.includes("attente")) return "warning";
-  if (s.includes("annul")) return "default";
-  return "info";
+const statusColorMap = {
+  en_attente: "warning",
+  "accepté": "success",
+  "refusé": "error",
+  en_cours: "info",
+  "terminé": "success",
+  "annulé": "default",
 };
+
+const paymentLabelMap = {
+  carte: "Carte",
+  especes: "Espèces",
+};
+
+const toInputDateTimeLocal = (d = new Date()) => {
+  const pad = (v) => String(v).padStart(2, "0");
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const mins = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${mins}`;
+};
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+};
+
+const normalizeList = (data) => (Array.isArray(data) ? data : data?.results ?? []);
 
 const Appointments = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading: authLoading, isClient } = useAuth();
+  const { user, isAuthenticated, isClient, isEmployer } = useAuth();
 
   const [appointments, setAppointments] = useState([]);
+  const [services, setServices] = useState([]);
+  const [employers, setEmployers] = useState([]);
+
   const [loading, setLoading] = useState(true);
+  const [loadingCreate, setLoadingCreate] = useState(false);
+  const [loadingPayId, setLoadingPayId] = useState(null);
+  const [loadingCancelId, setLoadingCancelId] = useState(null);
+  const [loadingReviewId, setLoadingReviewId] = useState(null);
+
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
+  const [openCreate, setOpenCreate] = useState(false);
   const [openReview, setOpenReview] = useState(false);
-  const [targetReviewId, setTargetReviewId] = useState(null);
-  const [reviewData, setReviewData] = useState({ rating: 5, feedback: "" });
 
-  const fromState = useMemo(() => ({ from: location.pathname }), [location.pathname]);
+  const [selectedReviewAppointment, setSelectedReviewAppointment] = useState(null);
+  const [reviewData, setReviewData] = useState({
+    rating: 5,
+    feedback: "",
+  });
 
-  const fetchAppointments = async () => {
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const initialEmployerId = params.get("employerId") || "";
+  const initialServiceId = params.get("serviceId") || "";
+
+  const [createForm, setCreateForm] = useState({
+    service: initialServiceId,
+    employer: initialEmployerId,
+    date: toInputDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000)),
+    description: "",
+    location: "",
+    payment_method: "especes",
+  });
+
+  const activeEmployers = useMemo(
+    () =>
+      employers.filter((e) => {
+        if (!createForm.service) return true;
+        const serviceId = e?.service?.id ?? e?.service ?? null;
+        return String(serviceId) === String(createForm.service);
+      }),
+    [employers, createForm.service]
+  );
+
+  const sortedAppointments = useMemo(
+    () =>
+      [...appointments].sort((a, b) => {
+        const da = new Date(a.date).getTime() || 0;
+        const db = new Date(b.date).getTime() || 0;
+        return db - da;
+      }),
+    [appointments]
+  );
+
+  const stats = useMemo(() => {
+    const total = appointments.length;
+    const pending = appointments.filter((a) => a.status === "en_attente").length;
+    const confirmed = appointments.filter((a) => a.status === "accepté").length;
+    const canceled = appointments.filter((a) => a.status === "annulé").length;
+    return { total, pending, confirmed, canceled };
+  }, [appointments]);
+
+  const resetMessages = () => {
+    setError("");
+    setSuccessMsg("");
+  };
+
+  const fetchAll = async () => {
+    setLoading(true);
+    resetMessages();
     try {
-      setLoading(true);
-      setError("");
-      const data = await appointmentAPI.list();
-      const list = Array.isArray(data) ? data : data?.results ?? [];
-      setAppointments(list);
+      const [appointmentsData, servicesData, employersData] = await Promise.all([
+        appointmentAPI.list(),
+        getServices(),
+        employerAPI.list(),
+      ]);
+
+      setAppointments(normalizeList(appointmentsData));
+      setServices(normalizeList(servicesData));
+      setEmployers(normalizeList(employersData));
     } catch (err) {
-      if (err.status === 401) {
-        navigate("/login", { state: fromState, replace: true });
-        return;
-      }
-      setError(err.message || "Erreur lors du chargement des rendez-vous.");
+      setError(err?.message || "Erreur lors du chargement des rendez-vous.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      navigate("/login", { state: fromState, replace: true });
+    if (!isAuthenticated) {
+      navigate("/login", { replace: true, state: { from: location.pathname } });
       return;
     }
-    fetchAppointments();
+    fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user]);
+  }, [isAuthenticated]);
 
-  const stats = useMemo(() => {
-    const total = appointments.length;
-    const pending = appointments.filter((a) => String(a.status).toLowerCase().includes("attente")).length;
-    const confirmed = appointments.filter((a) => String(a.status).toLowerCase().includes("accept")).length;
-    return { total, pending, confirmed };
-  }, [appointments]);
+  useEffect(() => {
+    // Ouvre le modal création si on arrive depuis Search avec employer/service
+    if (initialEmployerId || initialServiceId) {
+      setOpenCreate(true);
+    }
+  }, [initialEmployerId, initialServiceId]);
 
-  const handleCancel = async (id) => {
+  const handleCreateField = (key, value) => {
+    setCreateForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCreateAppointment = async (e) => {
+    e.preventDefault();
+    resetMessages();
+
+    if (!isClient) {
+      setError("Seul un compte client peut créer un rendez-vous.");
+      return;
+    }
+
+    if (!createForm.service || !createForm.employer || !createForm.date) {
+      setError("Service, prestataire et date/heure sont obligatoires.");
+      return;
+    }
+
+    setLoadingCreate(true);
     try {
-      setError("");
-      await appointmentAPI.delete(id);
-      await fetchAppointments();
+      await appointmentAPI.create({
+        service: Number(createForm.service),
+        employer: Number(createForm.employer),
+        date: new Date(createForm.date).toISOString(),
+        description: createForm.description,
+        location: createForm.location,
+        payment_method: createForm.payment_method,
+      });
+
+      setSuccessMsg("Rendez-vous créé avec succès.");
+      setOpenCreate(false);
+      await fetchAll();
     } catch (err) {
-      setError(err.message || "Impossible d’annuler ce rendez-vous.");
+      setError(err?.message || "Impossible de créer le rendez-vous.");
+    } finally {
+      setLoadingCreate(false);
     }
   };
 
-  const handlePay = async (id) => {
+  const handleCancel = async (appointmentId) => {
+    resetMessages();
+    setLoadingCancelId(appointmentId);
     try {
-      setError("");
-      await appointmentAPI.pay(id, { payment_method: "carte" });
-      await fetchAppointments();
+      await appointmentAPI.cancel(appointmentId, "Annulation depuis mon espace");
+      setSuccessMsg("Rendez-vous annulé.");
+      await fetchAll();
     } catch (err) {
-      setError(err.message || "Paiement impossible.");
+      setError(err?.message || "Impossible d’annuler ce rendez-vous.");
+    } finally {
+      setLoadingCancelId(null);
     }
   };
 
-  const openReviewDialog = (id) => {
-    setTargetReviewId(id);
-    setReviewData({ rating: 5, feedback: "" });
+  const handlePay = async (appointmentId, payment_method = "carte") => {
+    resetMessages();
+    setLoadingPayId(appointmentId);
+    try {
+      await appointmentAPI.pay(appointmentId, { payment_method });
+      setSuccessMsg("Paiement enregistré.");
+      await fetchAll();
+    } catch (err) {
+      setError(err?.message || "Paiement impossible.");
+    } finally {
+      setLoadingPayId(null);
+    }
+  };
+
+  const openReviewDialog = (appointment) => {
+    setSelectedReviewAppointment(appointment);
+    setReviewData({
+      rating: appointment?.rating || 5,
+      feedback: appointment?.feedback || "",
+    });
     setOpenReview(true);
   };
 
   const submitReview = async () => {
+    if (!selectedReviewAppointment) return;
+    resetMessages();
+    setLoadingReviewId(selectedReviewAppointment.id);
     try {
-      await appointmentAPI.review(targetReviewId, reviewData);
+      await appointmentAPI.review(selectedReviewAppointment.id, {
+        rating: Number(reviewData.rating),
+        feedback: reviewData.feedback,
+      });
+      setSuccessMsg("Avis envoyé avec succès.");
       setOpenReview(false);
-      await fetchAppointments();
+      await fetchAll();
     } catch (err) {
-      setError(err.message || "Envoi d’avis impossible.");
+      setError(err?.message || "Impossible d’envoyer l’avis.");
+    } finally {
+      setLoadingReviewId(null);
     }
   };
 
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 2 }}>
-        <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
-          <CircularProgress />
-          <Typography sx={{ mt: 1.3 }}>Chargement des rendez-vous...</Typography>
-        </Paper>
-      </Container>
-    );
-  }
+  const isCancelable = (appointment) =>
+    ["en_attente", "accepté", "en_cours"].includes(appointment.status);
+
+  const canReview = (appointment) =>
+    isClient &&
+    ["accepté", "terminé"].includes(appointment.status) &&
+    appointment.status !== "annulé";
 
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
@@ -161,150 +301,224 @@ const Appointments = () => {
           p: { xs: 2, md: 3 },
           mb: 2.2,
           borderRadius: 4,
-          background: "radial-gradient(circle at 10% -30%, rgba(86,169,255,.14), transparent 38%), #171b22",
+          background:
+            "radial-gradient(circle at 10% -30%, rgba(86,169,255,.14), transparent 38%), #171b22",
         }}
       >
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={1.6}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", md: "center" }}
+          spacing={1.6}
+        >
           <Box>
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>Mes rendez-vous</Typography>
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              Mes rendez-vous
+            </Typography>
             <Typography color="text.secondary">
               {isClient
-                ? "Gérez vos réservations, paiements et avis."
-                : "Consultez et gérez vos rendez-vous avec les clients."}
+                ? "Créez, suivez, annulez et notez vos rendez-vous."
+                : "Consultez les rendez-vous liés à votre compte prestataire."}
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
             {isClient && (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate("/search")}>
-                Prendre un rendez-vous
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenCreate(true)}
+              >
+                Nouveau rendez-vous
               </Button>
             )}
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchAppointments}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchAll}>
               Actualiser
             </Button>
           </Stack>
         </Stack>
 
         <Grid container spacing={1.2} sx={{ mt: 1 }}>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 1.6, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <EventNoteIcon color="info" />
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Total</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{stats.total}</Typography>
-                </Box>
-              </Stack>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
+              <Typography variant="caption" color="text.secondary">
+                Total
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                {stats.total}
+              </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 1.6, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <PendingActionsIcon color="warning" />
-                <Box>
-                  <Typography variant="caption" color="text.secondary">En attente</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{stats.pending}</Typography>
-                </Box>
-              </Stack>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
+              <Typography variant="caption" color="text.secondary">
+                En attente
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                {stats.pending}
+              </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 1.6, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <CheckCircleIcon color="success" />
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Confirmés</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{stats.confirmed}</Typography>
-                </Box>
-              </Stack>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
+              <Typography variant="caption" color="text.secondary">
+                Acceptés
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                {stats.confirmed}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
+              <Typography variant="caption" color="text.secondary">
+                Annulés
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                {stats.canceled}
+              </Typography>
             </Paper>
           </Grid>
         </Grid>
       </Paper>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {successMsg && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {successMsg}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
-      <Paper sx={{ p: 2.2, borderRadius: 3.5 }}>
-        {appointments.length === 0 ? (
-          <Paper
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              backgroundColor: alpha("#232935", 0.45),
-              border: "1px dashed",
-              borderColor: "divider",
-            }}
-          >
-            <CalendarIcon sx={{ fontSize: 42, color: "text.secondary", mb: 1 }} />
-            <Typography variant="h6">Aucun rendez-vous pour le moment</Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.6, mb: 1.8 }}>
-              {isClient
-                ? "Commence par réserver un service."
-                : "Les rendez-vous programmés apparaîtront ici."}
-            </Typography>
-            {isClient && (
-              <Button variant="contained" onClick={() => navigate("/search")}>
-                Rechercher un service
-              </Button>
-            )}
-          </Paper>
-        ) : (
+      {loading ? (
+        <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+          <CircularProgress />
+          <Typography sx={{ mt: 1.2 }}>Chargement des rendez-vous...</Typography>
+        </Paper>
+      ) : sortedAppointments.length === 0 ? (
+        <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
+          <Typography variant="h6">Aucun rendez-vous pour le moment</Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.6, mb: 1.8 }}>
+            {isClient
+              ? "Commencez par réserver un service avec un prestataire."
+              : "Les rendez-vous s’afficheront ici dès qu’ils seront créés."}
+          </Typography>
+          {isClient && (
+            <Button variant="contained" onClick={() => setOpenCreate(true)}>
+              Créer un rendez-vous
+            </Button>
+          )}
+        </Paper>
+      ) : (
+        <Paper sx={{ p: 2, borderRadius: 3.5 }}>
           <Box sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 860 }}>
+            <Table sx={{ minWidth: 1000 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>ID</TableCell>
                   <TableCell>Date</TableCell>
-                  <TableCell>Statut</TableCell>
                   <TableCell>Service</TableCell>
-                  <TableCell>{isClient ? "Prestataire" : "Client"}</TableCell>
+                  <TableCell>Prestataire</TableCell>
+                  <TableCell>Localisation</TableCell>
+                  <TableCell>Statut</TableCell>
                   <TableCell>Paiement</TableCell>
+                  <TableCell>Description</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
 
               <TableBody>
-                {appointments.map((a) => {
-                  const statusLabel = a.status_display || a.status || "—";
-                  const partner = isClient
-                    ? a.employer?.name || a.employer_name || "—"
-                    : a.client?.name || a.client_name || "—";
+                {sortedAppointments.map((appointment) => {
+                  const statusKey = appointment.status || "en_attente";
+                  const statusLabel = statusLabelMap[statusKey] || statusKey;
+                  const statusColor = statusColorMap[statusKey] || "default";
 
                   return (
-                    <TableRow key={a.id} hover sx={{ "&:hover": { bgcolor: alpha("#f38b2a", 0.06) } }}>
-                      <TableCell>{a.id}</TableCell>
-                      <TableCell>{toDateLabel(a.date || a.datetime || a.start_time || a.created_at)}</TableCell>
+                    <TableRow key={appointment.id} hover>
+                      <TableCell>{formatDate(appointment.date)}</TableCell>
+                      <TableCell>{appointment?.service?.name || "—"}</TableCell>
+                      <TableCell>{appointment?.employer?.name || "—"}</TableCell>
+                      <TableCell>{appointment?.location || "—"}</TableCell>
                       <TableCell>
-                        <Chip size="small" color={statusColor(statusLabel)} label={statusLabel} sx={{ fontWeight: 700 }} />
+                        <Chip label={statusLabel} color={statusColor} size="small" />
                       </TableCell>
-                      <TableCell>{a.service?.name || a.service_name || a.service || "—"}</TableCell>
-                      <TableCell>{partner}</TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          label={a.is_paid ? "Payé" : "Non payé"}
-                          color={a.is_paid ? "success" : "warning"}
-                        />
+                        <Stack spacing={0.4}>
+                          <Typography variant="body2">
+                            {paymentLabelMap[appointment.payment_method] || appointment.payment_method || "—"}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {appointment.is_paid ? "Payé" : "Non payé"}
+                          </Typography>
+                        </Stack>
                       </TableCell>
+                      <TableCell sx={{ maxWidth: 220 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                          title={appointment.description || ""}
+                        >
+                          {appointment.description || "—"}
+                        </Typography>
+                      </TableCell>
+
                       <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          {isClient && !a.is_paid && (
-                            <Button size="small" variant="outlined" onClick={() => handlePay(a.id)}>
-                              Payer
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          justifyContent="flex-end"
+                          flexWrap="wrap"
+                        >
+                          {isClient && !appointment.is_paid && appointment.status !== "annulé" && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<PaymentIcon />}
+                              onClick={() => handlePay(appointment.id, "carte")}
+                              disabled={loadingPayId === appointment.id}
+                            >
+                              {loadingPayId === appointment.id ? "..." : "Payer"}
                             </Button>
                           )}
 
-                          {isClient && (
-                            <Button size="small" variant="contained" onClick={() => openReviewDialog(a.id)}>
-                              Avis
+                          {isCancelable(appointment) && (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                              startIcon={<CancelIcon />}
+                              onClick={() => handleCancel(appointment.id)}
+                              disabled={loadingCancelId === appointment.id}
+                            >
+                              {loadingCancelId === appointment.id ? "..." : "Annuler"}
                             </Button>
                           )}
 
-                          <Button size="small" variant="text" color="error" onClick={() => handleCancel(a.id)}>
-                            Annuler
-                          </Button>
+                          {canReview(appointment) && (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<StarIcon />}
+                              onClick={() => openReviewDialog(appointment)}
+                            >
+                              Noter
+                            </Button>
+                          )}
+
+                          {!isClient && isEmployer && (
+                            <Chip
+                              size="small"
+                              icon={<EventIcon />}
+                              label="Vue prestataire"
+                              variant="outlined"
+                            />
+                          )}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -313,32 +527,160 @@ const Appointments = () => {
               </TableBody>
             </Table>
           </Box>
-        )}
-      </Paper>
+        </Paper>
+      )}
 
-      <Dialog open={openReview} onClose={() => setOpenReview(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Laisser un avis</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.4} sx={{ mt: 1 }}>
-            <TextField
-              label="Note (1 à 5)"
-              type="number"
-              inputProps={{ min: 1, max: 5 }}
-              value={reviewData.rating}
-              onChange={(e) => setReviewData((p) => ({ ...p, rating: Number(e.target.value) }))}
-            />
+      {/* Dialog création rendez-vous */}
+      <Dialog
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Nouveau rendez-vous</DialogTitle>
+        <DialogContent dividers>
+          {!isClient ? (
+            <Alert severity="warning">
+              Seul un compte client peut créer un rendez-vous.
+            </Alert>
+          ) : (
+            <Box component="form" id="create-appointment-form" onSubmit={handleCreateAppointment}>
+              <Grid container spacing={2} sx={{ mt: 0.2 }}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    select
+                    label="Service"
+                    fullWidth
+                    value={createForm.service}
+                    onChange={(e) => handleCreateField("service", e.target.value)}
+                  >
+                    {services.map((srv) => (
+                      <MenuItem key={srv.id} value={String(srv.id)}>
+                        {srv.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    select
+                    label="Prestataire"
+                    fullWidth
+                    value={createForm.employer}
+                    onChange={(e) => handleCreateField("employer", e.target.value)}
+                  >
+                    {activeEmployers.map((emp) => (
+                      <MenuItem key={emp.id} value={String(emp.id)}>
+                        {emp.name} {emp?.service?.name ? `(${emp.service.name})` : ""}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="Date / Heure"
+                    type="datetime-local"
+                    fullWidth
+                    value={createForm.date}
+                    onChange={(e) => handleCreateField("date", e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    select
+                    label="Mode de paiement"
+                    fullWidth
+                    value={createForm.payment_method}
+                    onChange={(e) => handleCreateField("payment_method", e.target.value)}
+                  >
+                    <MenuItem value="especes">Espèces</MenuItem>
+                    <MenuItem value="carte">Carte</MenuItem>
+                  </TextField>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <TextField
+                    label="Localisation"
+                    fullWidth
+                    value={createForm.location}
+                    onChange={(e) => handleCreateField("location", e.target.value)}
+                    placeholder="Adresse du rendez-vous"
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <TextField
+                    label="Description"
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    value={createForm.description}
+                    onChange={(e) => handleCreateField("description", e.target.value)}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenCreate(false)}>Fermer</Button>
+          {isClient && (
+            <Button
+              type="submit"
+              form="create-appointment-form"
+              variant="contained"
+              disabled={loadingCreate}
+            >
+              {loadingCreate ? "Création..." : "Créer"}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog avis */}
+      <Dialog
+        open={openReview}
+        onClose={() => setOpenReview(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Noter ce rendez-vous</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.8 }}>
+                Note
+              </Typography>
+              <Rating
+                value={Number(reviewData.rating)}
+                onChange={(_, value) => setReviewData((p) => ({ ...p, rating: value || 1 }))}
+                max={5}
+              />
+            </Box>
+
             <TextField
               label="Commentaire"
               multiline
               minRows={3}
               value={reviewData.feedback}
               onChange={(e) => setReviewData((p) => ({ ...p, feedback: e.target.value }))}
+              placeholder="Partagez votre expérience..."
             />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenReview(false)}>Annuler</Button>
-          <Button variant="contained" onClick={submitReview}>Envoyer</Button>
+          <Button
+            variant="contained"
+            onClick={submitReview}
+            disabled={loadingReviewId === selectedReviewAppointment?.id}
+          >
+            {loadingReviewId === selectedReviewAppointment?.id ? "Envoi..." : "Envoyer l’avis"}
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>
