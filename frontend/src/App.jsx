@@ -20,6 +20,7 @@ import Help from "./pages/Help";
 import Messages from "./pages/Messages";
 import Favorites from "./pages/Favorites";
 import ServiceDetails from "./pages/ServiceDetails";
+import ProviderDetail from "./pages/ProviderDetail";
 
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
@@ -168,9 +169,7 @@ const RequireClient = ({ children }) => {
   const location = useLocation();
 
   if (loading) return <FullPageLoader />;
-  if (!isClient) {
-    return <Navigate to="/appointments" replace state={{ from: location.pathname }} />;
-  }
+  if (!isClient) return <Navigate to="/appointments" replace state={{ from: location.pathname }} />;
 
   return children;
 };
@@ -192,6 +191,7 @@ const AppRoutes = () => {
           <Route path="/" element={<Home />} />
           <Route path="/help" element={<Help />} />
           <Route path="/services/:id" element={<ServiceDetails />} />
+          <Route path="/employers/:id" element={<ProviderDetail />} />
 
           <Route
             path="/search"

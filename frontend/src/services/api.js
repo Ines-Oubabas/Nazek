@@ -131,6 +131,8 @@ export const APPOINTMENT_URLS = {
   CREATE: `${API_VERSION}/appointments/create/`,
   DETAIL: (id) => `${API_VERSION}/appointments/${id}/`,
   CANCEL: (id) => `${API_VERSION}/appointments/${id}/cancel/`,
+  ACCEPT: (id) => `${API_VERSION}/appointments/${id}/accept/`,
+  REFUSE: (id) => `${API_VERSION}/appointments/${id}/refuse/`,
   REVIEW: (id) => `${API_VERSION}/appointments/${id}/review/`,
   ADD_REVIEW: (id) => `${API_VERSION}/appointments/${id}/add-review/`,
   PAYMENT: (id) => `${API_VERSION}/appointments/${id}/payment/`,
@@ -150,6 +152,7 @@ export const FAVORITE_URLS = {
 export const MESSAGING_URLS = {
   CONVERSATIONS: `${API_VERSION}/conversations/`,
   MESSAGES: `${API_VERSION}/messages/`,
+  MARK_READ: `${API_VERSION}/messages/mark-read/`,
 };
 
 export const CONTACT_URLS = {
@@ -227,7 +230,6 @@ export const authAPI = {
  * =======================================================*/
 
 export const userAPI = {
-  // Compat legacy : essaie profil employeur puis client
   getProfile: async () => {
     try {
       return await apiRequest(EMPLOYER_URLS.PROFILE);
@@ -236,8 +238,13 @@ export const userAPI = {
     }
   },
 
-  // Compat : PATCH par défaut
-  updateProfile: async (data) => {
+  updateProfile: async (data, roleHint = "") => {
+    if (roleHint === "employer") {
+      return apiRequest(EMPLOYER_URLS.UPDATE, { method: "PATCH", data });
+    }
+    if (roleHint === "client") {
+      return apiRequest(CLIENT_URLS.PROFILE, { method: "PATCH", data });
+    }
     try {
       return await apiRequest(EMPLOYER_URLS.UPDATE, { method: "PATCH", data });
     } catch {
@@ -246,13 +253,10 @@ export const userAPI = {
   },
 
   updateUser: (data) => authAPI.updateUser(data),
-
   createClientProfile: (data = {}) =>
     apiRequest(CLIENT_URLS.CREATE_PROFILE, { method: "POST", data }),
-
   createEmployerProfile: (data = {}) =>
     apiRequest(EMPLOYER_URLS.CREATE_PROFILE, { method: "POST", data }),
-
   changePassword: (data) =>
     apiRequest(USER_URLS.CHANGE_PASSWORD, { method: "POST", data }),
 };
@@ -300,24 +304,18 @@ export const appointmentAPI = {
   list: () => apiRequest(APPOINTMENT_URLS.LIST),
   create: (data) => apiRequest(APPOINTMENT_URLS.CREATE, { method: "POST", data }),
   detail: (id) => apiRequest(APPOINTMENT_URLS.DETAIL(id)),
-
-  // Compat legacy: PUT complet
   update: (id, data) => apiRequest(APPOINTMENT_URLS.DETAIL(id), { method: "PUT", data }),
   patch: (id, data) => apiRequest(APPOINTMENT_URLS.DETAIL(id), { method: "PATCH", data }),
-
-  // Compat avec ancien frontend: delete => backend annule de façon non destructive
   delete: (id) => apiRequest(APPOINTMENT_URLS.DETAIL(id), { method: "DELETE" }),
-
-  // Nouvelle annulation explicite
   cancel: (id, reason = "") =>
     apiRequest(APPOINTMENT_URLS.CANCEL(id), { method: "POST", data: { reason } }),
-
+  accept: (id) =>
+    apiRequest(APPOINTMENT_URLS.ACCEPT(id), { method: "POST" }),
+  refuse: (id, reason = "") =>
+    apiRequest(APPOINTMENT_URLS.REFUSE(id), { method: "POST", data: { reason } }),
   review: (id, data) => apiRequest(APPOINTMENT_URLS.REVIEW(id), { method: "POST", data }),
   addReview: (id, data) => apiRequest(APPOINTMENT_URLS.ADD_REVIEW(id), { method: "PUT", data }),
-
   pay: (id, data) => apiRequest(APPOINTMENT_URLS.PAYMENT(id), { method: "POST", data }),
-
-  // endpoint payment legacy
   processPayment: (appointmentId, data = {}) =>
     apiRequest(PAYMENT_URLS.PROCESS(appointmentId), { method: "POST", data }),
 };
@@ -374,6 +372,12 @@ export const messagingAPI = {
       method: "POST",
       data: { conversation_id: conversationId, content },
     }),
+
+  markConversationRead: (conversationId) =>
+    apiRequest(MESSAGING_URLS.MARK_READ, {
+      method: "POST",
+      data: { conversation_id: conversationId },
+    }),
 };
 
 /* =========================================================
@@ -395,11 +399,11 @@ export const notificationAPI = {
 };
 
 /* =========================================================
- * Legacy exports (compat pages existantes)
+ * Legacy exports (compat)
  * =======================================================*/
 
 export const CHANGE_PASSWORD_URL = USER_URLS.CHANGE_PASSWORD;
-export const UPDATE_PROFILE_URL = AUTH_URLS.USER; // plus juste qu'avant
+export const UPDATE_PROFILE_URL = AUTH_URLS.USER;
 export const USERS_URL = USER_URLS;
 
 export const SERVICES_URL = SERVICE_URLS;

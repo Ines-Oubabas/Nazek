@@ -264,7 +264,6 @@ class ClientProfileUpsertSerializer(serializers.Serializer):
             client.save()
             return client
 
-        # création profil client
         default_name = f"{user.first_name} {user.last_name}".strip() or user.username
         client = Client.objects.create(
             user=user,
@@ -321,7 +320,6 @@ class EmployerProfileUpsertSerializer(serializers.Serializer):
             employer.save()
             return employer
 
-        # création profil prestataire
         default_name = f"{user.first_name} {user.last_name}".strip() or user.username
         employer = Employer.objects.create(
             user=user,
@@ -343,14 +341,6 @@ class EmployerProfileUpsertSerializer(serializers.Serializer):
 # ----------------------------
 
 class RegisterSerializer(serializers.Serializer):
-    """
-    Permet de créer :
-      - utilisateur seul
-      - utilisateur + profil client
-      - utilisateur + profil prestataire
-      - utilisateur + les deux profils
-    """
-    # user
     username = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, min_length=8)
@@ -360,15 +350,12 @@ class RegisterSerializer(serializers.Serializer):
     phone = serializers.CharField(required=False, allow_blank=True)
     address = serializers.CharField(required=False, allow_blank=True)
 
-    # toggles
     create_client_profile = serializers.BooleanField(required=False, default=True)
     create_employer_profile = serializers.BooleanField(required=False, default=False)
 
-    # client profile data
     client_name = serializers.CharField(required=False, allow_blank=True)
     client_email = serializers.EmailField(required=False)
 
-    # employer profile data
     employer_name = serializers.CharField(required=False, allow_blank=True)
     employer_email = serializers.EmailField(required=False)
     employer_service_id = serializers.PrimaryKeyRelatedField(
@@ -390,7 +377,6 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        # compat legacy : si role=employer et pas de toggles, on active employeur
         role = attrs.get("role")
         create_client = attrs.get("create_client_profile", True)
         create_employer = attrs.get("create_employer_profile", False)
@@ -412,17 +398,12 @@ class RegisterSerializer(serializers.Serializer):
         client_email = normalize_email(attrs.get("client_email") or user_email)
         employer_email = normalize_email(attrs.get("employer_email") or user_email)
 
-        if create_client:
-            qs_client = Client.objects.filter(email__iexact=client_email)
-            if qs_client.exists():
-                raise serializers.ValidationError({"client_email": "Cette adresse email client existe déjà."})
+        if create_client and Client.objects.filter(email__iexact=client_email).exists():
+            raise serializers.ValidationError({"client_email": "Cette adresse email client existe déjà."})
 
-        if create_employer:
-            qs_employer = Employer.objects.filter(email__iexact=employer_email)
-            if qs_employer.exists():
-                raise serializers.ValidationError({"employer_email": "Cette adresse email prestataire existe déjà."})
+        if create_employer and Employer.objects.filter(email__iexact=employer_email).exists():
+            raise serializers.ValidationError({"employer_email": "Cette adresse email prestataire existe déjà."})
 
-        # NB: client_email == employer_email est AUTORISÉ (dans 2 tables différentes)
         return attrs
 
     def create(self, validated_data):
@@ -506,7 +487,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "client",
             "employer",
             "service",
-            "date",  # legacy compatibility
+            "date",
             "status",
             "description",
             "payment_method",
@@ -563,7 +544,6 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
                 {"service": "Le service sélectionné ne correspond pas au prestataire choisi."}
             )
 
-        # collision simple sur la même date/heure, hors rendez-vous annulés/refusés
         if employer and date_value:
             conflict = employer.employer_appointments.filter(date=date_value).exclude(
                 status__in=[Appointment.Status.CANCELED, Appointment.Status.REFUSED]
@@ -579,7 +559,7 @@ class AppointmentCancelSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         appointment: Appointment = self.context["appointment"]
-        canceled_by = self.context["canceled_by"]  # "client" | "prestataire" | "systeme"
+        canceled_by = self.context["canceled_by"]
         reason = self.validated_data.get("reason", "")
         appointment.cancel(by=canceled_by, reason=reason)
         return appointment
@@ -616,17 +596,11 @@ class ReviewSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"rating": "La note doit être comprise entre 1 et 5."})
 
         if appointment and appointment.status not in [Appointment.Status.COMPLETED, Appointment.Status.ACCEPTED]:
-            raise serializers.ValidationError(
-                {"appointment": "Vous pouvez noter un rendez-vous accepté/terminé."}
-            )
+            raise serializers.ValidationError({"appointment": "Vous pouvez noter un rendez-vous accepté/terminé."})
         return attrs
 
 
 class AppointmentReviewLegacySerializer(serializers.ModelSerializer):
-    """
-    Compatibilité avec le flow legacy (feedback/rating dans Appointment),
-    tout en gardant le modèle Review pour la suite.
-    """
     class Meta:
         model = Appointment
         fields = ["id", "feedback", "rating"]
@@ -645,7 +619,6 @@ class AppointmentReviewLegacySerializer(serializers.ModelSerializer):
             instance.status = Appointment.Status.COMPLETED
         instance.save()
 
-        # Synchronisation review structurée
         Review.objects.update_or_create(
             appointment=instance,
             defaults={
@@ -806,7 +779,6 @@ class MessageCreateSerializer(serializers.Serializer):
         elif hasattr(request.user, "employer") and conversation.employer.user_id == request.user.id:
             sender_type = Message.SenderType.EMPLOYER
         else:
-            # fallback sécurité
             raise serializers.ValidationError("Expéditeur invalide pour cette conversation.")
 
         msg = Message.objects.create(
@@ -860,9 +832,6 @@ class NotificationSerializer(serializers.ModelSerializer):
 # ----------------------------
 
 class MyProfilesSerializer(serializers.Serializer):
-    """
-    Réponse pratique pour endpoint "mon profil complet".
-    """
     user = UserSerializer(read_only=True)
     client = ClientSerializer(read_only=True, allow_null=True)
     employer = EmployerSerializer(read_only=True, allow_null=True)

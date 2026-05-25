@@ -31,6 +31,7 @@ import {
   EventAvailable as EventAvailableIcon,
   FavoriteBorder as FavoriteBorderIcon,
   Favorite as FavoriteIcon,
+  ChatBubbleOutline as MessageIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 
@@ -39,6 +40,7 @@ import {
   searchPlacesMapbox,
   searchAPI,
   favoritesAPI,
+  messagingAPI,
 } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -50,7 +52,7 @@ const Search = () => {
   const [services, setServices] = useState([]);
   const [employers, setEmployers] = useState([]);
 
-  const [favorites, setFavorites] = useState([]); // [{id, employer:{id,...}}]
+  const [favorites, setFavorites] = useState([]);
   const favoriteEmployerIds = useMemo(
     () => new Set(favorites.map((f) => f?.employer?.id).filter(Boolean)),
     [favorites]
@@ -58,6 +60,7 @@ const Search = () => {
 
   const [loading, setLoading] = useState(true);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [loadingContactId, setLoadingContactId] = useState(null);
   const [error, setError] = useState("");
 
   const [locationOptions, setLocationOptions] = useState([]);
@@ -101,7 +104,6 @@ const Search = () => {
       const list = Array.isArray(data) ? data : data?.results ?? [];
       setFavorites(list);
     } catch {
-      // Non bloquant pour la recherche
       setFavorites([]);
     } finally {
       setLoadingFavorites(false);
@@ -216,6 +218,24 @@ const Search = () => {
     }
   };
 
+  const handleContactEmployer = async (employer) => {
+    if (!isAuthenticated || !isClient) {
+      setError("Connectez-vous avec un compte client pour contacter un prestataire.");
+      return;
+    }
+
+    setLoadingContactId(employer.id);
+    try {
+      setError("");
+      const conversation = await messagingAPI.createConversation(employer.id);
+      navigate(`/messages?conversationId=${conversation?.id}`);
+    } catch (err) {
+      setError(err?.message || "Impossible d'ouvrir la conversation.");
+    } finally {
+      setLoadingContactId(null);
+    }
+  };
+
   const getServiceLabel = (employer) => {
     const serviceName = employer?.service?.name;
     if (serviceName) return serviceName;
@@ -285,12 +305,7 @@ const Search = () => {
                 select
                 fullWidth
                 value={selectedServiceId}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    service: e.target.value,
-                  }))
-                }
+                onChange={(e) => setFilters((p) => ({ ...p, service: e.target.value }))}
                 placeholder="Service"
               >
                 <MenuItem value="">Tous les services</MenuItem>
@@ -408,12 +423,7 @@ const Search = () => {
                           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
                             <Chip size="small" label={serviceLabel} variant="outlined" />
                             {employer.is_verified && (
-                              <Chip
-                                size="small"
-                                color="success"
-                                icon={<VerifiedIcon />}
-                                label="Vérifié"
-                              />
+                              <Chip size="small" color="success" icon={<VerifiedIcon />} label="Vérifié" />
                             )}
                           </Stack>
                         </Box>
@@ -475,11 +485,7 @@ const Search = () => {
                     </CardContent>
 
                     <CardActions sx={{ p: 2, pt: 0, display: "flex", gap: 1, flexWrap: "wrap" }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => navigate(`/employers/${employer.id}`)}
-                      >
+                      <Button size="small" variant="outlined" onClick={() => navigate(`/employers/${employer.id}`)}>
                         Voir détail
                       </Button>
 
@@ -494,8 +500,19 @@ const Search = () => {
                             }`
                           )
                         }
+                        disabled={!isClient}
                       >
                         Rendez-vous
+                      </Button>
+
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<MessageIcon />}
+                        onClick={() => handleContactEmployer(employer)}
+                        disabled={!isClient || loadingContactId === employer.id}
+                      >
+                        {loadingContactId === employer.id ? "..." : "Contacter"}
                       </Button>
 
                       <Button

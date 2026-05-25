@@ -5,7 +5,7 @@ import random
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
-from django.db.models import DateTimeField, Q
+from django.db.models import DateTimeField, Q, Count
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.text import slugify
@@ -234,7 +234,6 @@ class RegisterView(APIView):
     def post(self, request):
         payload = request.data.copy()
 
-        # Compatibilité legacy avec ancien front
         if "create_client_profile" not in payload and "create_employer_profile" not in payload:
             role = payload.get("role")
             if role:
@@ -245,7 +244,6 @@ class RegisterView(APIView):
             payload["create_client_profile"] = role == "client"
             payload["create_employer_profile"] = role == "employer"
 
-            # envoi ancien front
             if payload.get("service_type") and not payload.get("employer_service_id"):
                 srv = resolve_service(payload.get("service_type"))
                 if srv:
@@ -332,7 +330,6 @@ class ChangePasswordView(APIView):
         if not new_password:
             return Response({"new_password": ["Nouveau mot de passe requis."]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # La confirmation est vérifiée uniquement si elle est envoyée
         sent_confirmation = any(
             key in data for key in ["new_password_confirm", "confirm_password", "confirmPassword", "newPasswordConfirm"]
         )
@@ -355,8 +352,6 @@ class ChangePasswordView(APIView):
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
-
-        # JWT reste valide jusqu'à expiration du token en cours.
         return Response({"message": "Mot de passe mis à jour avec succès."}, status=status.HTTP_200_OK)
 
 
@@ -455,12 +450,6 @@ class EmployerList(ListAPIView):
 
 
 class SearchView(ListAPIView):
-    """
-    Endpoint dédié recherche prestataires :
-    - q (nom prestataire / description / service)
-    - location (ville/adresse)
-    - service (id ou nom)
-    """
     permission_classes = [AllowAny]
     serializer_class = EmployerSerializer
 
@@ -538,7 +527,6 @@ class EmployerAvailability(APIView):
         if not employer:
             return Response({"detail": "Prestataire introuvable."}, status=status.HTTP_404_NOT_FOUND)
 
-        # seul le prestataire lui-même (ou admin) peut modifier
         if not (request.user.is_staff or (hasattr(request.user, "employer") and request.user.employer.id == employer.id)):
             raise PermissionDenied("Non autorisé.")
 
@@ -589,9 +577,6 @@ class ClientProfile(APIView):
 
 
 class CreateClientProfile(APIView):
-    """
-    Endpoint explicite pour créer le profil client si absent.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -604,9 +589,6 @@ class CreateClientProfile(APIView):
 
 
 class CreateEmployerProfile(APIView):
-    """
-    Endpoint explicite pour créer le profil prestataire si absent.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -664,7 +646,6 @@ class AppointmentDetail(RetrieveUpdateDestroyAPIView):
         return user_appointments_queryset(self.request.user)
 
     def perform_destroy(self, instance):
-        # Compatibilité endpoint DELETE : annulation non destructive
         actor = "systeme"
         if hasattr(self.request.user, "client") and instance.client_id == self.request.user.client.id:
             actor = "client"
@@ -701,7 +682,6 @@ class AppointmentCancelView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        # Notifications
         if by == "client":
             create_notification(
                 appointment.employer.user,
@@ -719,6 +699,65 @@ class AppointmentCancelView(APIView):
                 appointment,
             )
 
+        return Response(AppointmentSerializer(appointment).data, status=status.HTTP_200_OK)
+
+
+class AppointmentAcceptView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        appointment = Appointment.objects.select_related("client", "employer").filter(pk=pk).first()
+        if not appointment:
+            return Response({"detail": "Rendez-vous introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(request.user, "employer") or appointment.employer_id != request.user.employer.id:
+            raise PermissionDenied("Seul le prestataire concerné peut accepter ce rendez-vous.")
+
+        if appointment.status in [Appointment.Status.CANCELED, Appointment.Status.REFUSED, Appointment.Status.COMPLETED]:
+            return Response({"detail": "Ce rendez-vous ne peut plus être accepté."}, status=status.HTTP_400_BAD_REQUEST)
+
+        appointment.status = Appointment.Status.ACCEPTED
+        appointment.save(update_fields=["status", "updated_at"])
+
+        create_notification(
+            appointment.client.user,
+            "appointment_accepted",
+            "Rendez-vous accepté",
+            f"Votre rendez-vous du {appointment.date} a été accepté.",
+            appointment,
+        )
+        return Response(AppointmentSerializer(appointment).data, status=status.HTTP_200_OK)
+
+
+class AppointmentRefuseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        appointment = Appointment.objects.select_related("client", "employer").filter(pk=pk).first()
+        if not appointment:
+            return Response({"detail": "Rendez-vous introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(request.user, "employer") or appointment.employer_id != request.user.employer.id:
+            raise PermissionDenied("Seul le prestataire concerné peut refuser ce rendez-vous.")
+
+        if appointment.status in [Appointment.Status.CANCELED, Appointment.Status.REFUSED, Appointment.Status.COMPLETED]:
+            return Response({"detail": "Ce rendez-vous ne peut plus être refusé."}, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = (request.data.get("reason") or "").strip()
+        appointment.status = Appointment.Status.REFUSED
+        if reason:
+            appointment.cancel_reason = reason
+            appointment.save(update_fields=["status", "cancel_reason", "updated_at"])
+        else:
+            appointment.save(update_fields=["status", "updated_at"])
+
+        create_notification(
+            appointment.client.user,
+            "appointment_refused",
+            "Rendez-vous refusé",
+            f"Votre rendez-vous du {appointment.date} a été refusé.",
+            appointment,
+        )
         return Response(AppointmentSerializer(appointment).data, status=status.HTTP_200_OK)
 
 
@@ -880,7 +919,17 @@ class ConversationListCreate(APIView):
         qs = Conversation.objects.select_related("client", "employer", "client__user", "employer__user").filter(
             Q(client__user=request.user) | Q(employer__user=request.user)
         ).order_by("-updated_at")
-        return Response(ConversationSerializer(qs, many=True).data)
+
+        serialized = ConversationSerializer(qs, many=True).data
+        enriched = []
+        for item in serialized:
+            convo = qs.filter(pk=item["id"]).first()
+            unread_count = 0
+            if convo:
+                unread_count = convo.messages.exclude(sender_user=request.user).filter(is_read=False).count()
+            item["unread_count"] = unread_count
+            enriched.append(item)
+        return Response(enriched)
 
     def post(self, request):
         serializer = ConversationCreateSerializer(data=request.data, context={"request": request})
@@ -912,6 +961,28 @@ class MessageListCreate(APIView):
         serializer.is_valid(raise_exception=True)
         msg = serializer.save()
         return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+
+class MarkConversationReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        conversation_id = request.data.get("conversation_id")
+        if not conversation_id or not str(conversation_id).isdigit():
+            return Response({"detail": "conversation_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+
+        conversation = Conversation.objects.filter(pk=int(conversation_id), is_active=True).first()
+        if not conversation:
+            return Response({"detail": "Conversation introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.id not in (conversation.client.user_id, conversation.employer.user_id):
+            raise PermissionDenied("Non autorisé.")
+
+        updated = Message.objects.filter(
+            conversation=conversation, is_read=False
+        ).exclude(sender_user=request.user).update(is_read=True, read_at=timezone.now())
+
+        return Response({"updated": updated}, status=status.HTTP_200_OK)
 
 
 # ----------------------------

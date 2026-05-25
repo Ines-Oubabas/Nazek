@@ -29,10 +29,11 @@ import {
   Person as PersonIcon,
   CalendarToday as CalendarIcon,
   Verified as VerifiedIcon,
+  ChatBubbleOutline as MessageIcon,
 } from "@mui/icons-material";
 
 import { useAuth } from "../contexts/AuthContext";
-import { employerAPI, serviceAPI, appointmentAPI } from "../services/api";
+import { employerAPI, serviceAPI, appointmentAPI, messagingAPI } from "../services/api";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -45,7 +46,7 @@ const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isClient } = useAuth();
 
   const [provider, setProvider] = useState(null);
   const [services, setServices] = useState([]);
@@ -56,6 +57,7 @@ const ProviderDetail = () => {
 
   const [bookingDialog, setBookingDialog] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
 
   const [bookingData, setBookingData] = useState({
     service: "",
@@ -66,21 +68,15 @@ const ProviderDetail = () => {
 
   const providerName = useMemo(() => {
     if (!provider) return "Prestataire";
-    return (
-      provider.name ||
-      provider.user?.username ||
-      provider.user?.email ||
-      `Prestataire #${provider.id}`
-    );
+    return provider.name || provider.user?.username || provider.user?.email || `Prestataire #${provider.id}`;
   }, [provider]);
 
-  const providerEmail = useMemo(() => {
-    return provider?.email || provider?.user?.email || "";
-  }, [provider]);
+  const providerEmail = useMemo(() => provider?.email || provider?.user?.email || "", [provider]);
 
-  const providerDescription = useMemo(() => {
-    return provider?.description || "Prestataire professionnel disponible sur la plateforme.";
-  }, [provider]);
+  const providerDescription = useMemo(
+    () => provider?.description || "Prestataire professionnel disponible sur la plateforme.",
+    [provider]
+  );
 
   const providerRating = useMemo(() => {
     const v = Number(provider?.average_rating || 0);
@@ -94,15 +90,7 @@ const ProviderDetail = () => {
   }, [provider]);
 
   const resolveDayLabel = (day) => {
-    const map = {
-      0: "Lundi",
-      1: "Mardi",
-      2: "Mercredi",
-      3: "Jeudi",
-      4: "Vendredi",
-      5: "Samedi",
-      6: "Dimanche",
-    };
+    const map = { 0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 4: "Vendredi", 5: "Samedi", 6: "Dimanche" };
     return map[day] ?? `Jour ${day}`;
   };
 
@@ -111,7 +99,6 @@ const ProviderDetail = () => {
       setLoading(true);
       setError("");
 
-      // 1) Récupérer la liste des prestataires puis trouver celui demandé
       const employersRaw = await employerAPI.list();
       const employers = Array.isArray(employersRaw) ? employersRaw : employersRaw?.results ?? [];
       const current = employers.find((e) => String(e.id) === String(id));
@@ -124,27 +111,22 @@ const ProviderDetail = () => {
 
       setProvider(current);
 
-      // 2) Services (pour réservation)
       const servicesRaw = await serviceAPI.list();
       const servicesList = Array.isArray(servicesRaw) ? servicesRaw : servicesRaw?.results ?? [];
       setServices(servicesList);
 
-      // service par défaut
-      const defaultServiceId =
-        current?.service?.id || current?.service || servicesList?.[0]?.id || "";
+      const defaultServiceId = current?.service?.id || current?.service || servicesList?.[0]?.id || "";
       setBookingData((prev) => ({ ...prev, service: String(defaultServiceId || "") }));
 
-      // 3) Disponibilités du prestataire
       try {
         const avRaw = await employerAPI.getAvailabilities(current.id);
         const avList = Array.isArray(avRaw) ? avRaw : avRaw?.results ?? [];
         setAvailabilities(avList);
       } catch {
-        // endpoint dispo mais peut être vide/partiel
         setAvailabilities([]);
       }
     } catch (err) {
-      setError(err.message || "Erreur lors du chargement du prestataire.");
+      setError(err?.message || "Erreur lors du chargement du prestataire.");
     } finally {
       setLoading(false);
     }
@@ -160,12 +142,14 @@ const ProviderDetail = () => {
       navigate("/login", { state: { from: location.pathname } });
       return;
     }
+    if (!isClient) {
+      setError("Seul un compte client peut prendre un rendez-vous.");
+      return;
+    }
     setBookingDialog(true);
   };
 
-  const closeBooking = () => {
-    setBookingDialog(false);
-  };
+  const closeBooking = () => setBookingDialog(false);
 
   const handleBookingSubmit = async () => {
     try {
@@ -173,29 +157,53 @@ const ProviderDetail = () => {
         navigate("/login", { state: { from: location.pathname } });
         return;
       }
+      if (!isClient) {
+        setError("Seul un compte client peut prendre un rendez-vous.");
+        return;
+      }
 
       if (!provider?.id) throw new Error("Prestataire introuvable.");
       if (!bookingData.service) throw new Error("Veuillez sélectionner un service.");
-      if (!bookingData.date || !bookingData.time) {
-        throw new Error("Veuillez sélectionner une date et une heure.");
-      }
+      if (!bookingData.date || !bookingData.time) throw new Error("Veuillez sélectionner une date et une heure.");
 
       setBookingLoading(true);
 
       await appointmentAPI.create({
         employer: provider.id,
         service: Number(bookingData.service),
-        date: bookingData.date, // YYYY-MM-DD
-        time: bookingData.time, // HH:mm
+        date: bookingData.date,
+        time: bookingData.time,
         notes: bookingData.notes,
       });
 
       setBookingDialog(false);
       navigate("/appointments");
     } catch (err) {
-      setError(err.message || "Erreur lors de la création du rendez-vous.");
+      setError(err?.message || "Erreur lors de la création du rendez-vous.");
     } finally {
       setBookingLoading(false);
+    }
+  };
+
+  const handleContact = async () => {
+    if (!user) {
+      navigate("/login", { state: { from: location.pathname } });
+      return;
+    }
+    if (!isClient) {
+      setError("Seul un compte client peut initier une conversation.");
+      return;
+    }
+    if (!provider?.id) return;
+
+    setContactLoading(true);
+    try {
+      const convo = await messagingAPI.createConversation(provider.id);
+      navigate(`/messages?conversationId=${convo?.id}`);
+    } catch (err) {
+      setError(err?.message || "Impossible d’ouvrir la conversation.");
+    } finally {
+      setContactLoading(false);
     }
   };
 
@@ -224,7 +232,6 @@ const ProviderDetail = () => {
       )}
 
       <Grid container spacing={2.2}>
-        {/* Header profil */}
         <Grid item xs={12}>
           <Paper
             sx={{
@@ -234,11 +241,7 @@ const ProviderDetail = () => {
                 "radial-gradient(circle at 10% -30%, rgba(255,138,28,.14), transparent 38%), #171a21",
             }}
           >
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={2}
-              alignItems={{ xs: "flex-start", md: "center" }}
-            >
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "flex-start", md: "center" }}>
               <Avatar
                 src={provider?.profile_picture}
                 sx={{
@@ -271,14 +274,23 @@ const ProviderDetail = () => {
                 </Typography>
               </Box>
 
-              <Button variant="contained" startIcon={<CalendarIcon />} onClick={openBooking}>
-                Prendre rendez-vous
-              </Button>
+              <Stack direction={{ xs: "row", md: "column" }} spacing={1}>
+                <Button variant="contained" startIcon={<CalendarIcon />} onClick={openBooking} disabled={!isClient}>
+                  Prendre rendez-vous
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<MessageIcon />}
+                  onClick={handleContact}
+                  disabled={!isClient || contactLoading}
+                >
+                  {contactLoading ? "..." : "Contacter"}
+                </Button>
+              </Stack>
             </Stack>
           </Paper>
         </Grid>
 
-        {/* Infos + dispos */}
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2.4, borderRadius: 3.5 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.2 }}>
@@ -301,9 +313,7 @@ const ProviderDetail = () => {
 
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <Rating value={providerRating} readOnly precision={0.5} />
-                <Typography color="text.secondary">
-                  ({provider?.total_reviews || 0} avis)
-                </Typography>
+                <Typography color="text.secondary">({provider?.total_reviews || 0} avis)</Typography>
               </Box>
 
               {providerRate ? (
@@ -350,18 +360,28 @@ const ProviderDetail = () => {
           </Paper>
         </Grid>
 
-        {/* Sidebar actions */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2.4, borderRadius: 3.5 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.2 }}>
-              Réserver rapidement
+              Actions
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 1.6 }}>
-              Lance la réservation en quelques clics depuis ce profil.
+              Réserver ou démarrer une conversation avec ce prestataire.
             </Typography>
 
-            <Button fullWidth variant="contained" startIcon={<CalendarIcon />} onClick={openBooking}>
+            <Button fullWidth variant="contained" startIcon={<CalendarIcon />} onClick={openBooking} disabled={!isClient}>
               Prendre rendez-vous
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<MessageIcon />}
+              sx={{ mt: 1.2 }}
+              onClick={handleContact}
+              disabled={!isClient || contactLoading}
+            >
+              {contactLoading ? "Ouverture..." : "Contacter"}
             </Button>
 
             <Button
@@ -377,7 +397,6 @@ const ProviderDetail = () => {
         </Grid>
       </Grid>
 
-      {/* Dialog réservation */}
       <Dialog open={bookingDialog} onClose={closeBooking} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700 }}>Réserver avec {providerName}</DialogTitle>
         <DialogContent>

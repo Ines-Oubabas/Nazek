@@ -24,7 +24,6 @@ import {
   Save as SaveIcon,
   LockReset as LockResetIcon,
   DeleteForever as DeleteIcon,
-  AddCircleOutline as AddIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
@@ -44,8 +43,6 @@ const Profile = () => {
     refreshUser,
     deleteAccount,
   } = useAuth();
-
-  const [tab, setTab] = useState("user");
 
   const [userForm, setUserForm] = useState({
     first_name: user?.first_name || "",
@@ -83,8 +80,7 @@ const Profile = () => {
   });
 
   const [loadingUser, setLoadingUser] = useState(false);
-  const [loadingClient, setLoadingClient] = useState(false);
-  const [loadingEmployer, setLoadingEmployer] = useState(false);
+  const [loadingRoleProfile, setLoadingRoleProfile] = useState(false);
   const [loadingPassword, setLoadingPassword] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
 
@@ -142,67 +138,47 @@ const Profile = () => {
     }
   };
 
-  const submitClientProfile = async (e) => {
+  const submitRoleProfile = async (e) => {
     e.preventDefault();
     resetMessages();
-    setLoadingClient(true);
+    setLoadingRoleProfile(true);
 
     try {
-      if (clientProfile) {
-        await userAPI.updateProfile({
-          name: clientForm.name,
-          email: clientForm.email,
-          phone: clientForm.phone,
-          address: clientForm.address,
-          city: clientForm.city,
-        });
+      if (isClient) {
+        await userAPI.updateProfile(
+          {
+            name: clientForm.name,
+            email: clientForm.email,
+            phone: clientForm.phone,
+            address: clientForm.address,
+            city: clientForm.city,
+          },
+          "client"
+        );
+        setSuccessMsg("Profil client mis à jour.");
+      } else if (isEmployer) {
+        await userAPI.updateProfile(
+          {
+            name: employerForm.name,
+            email: employerForm.email,
+            phone: employerForm.phone,
+            description: employerForm.description,
+            city: employerForm.city,
+            address: employerForm.address,
+            hourly_rate: employerForm.hourly_rate === "" ? null : Number(employerForm.hourly_rate),
+          },
+          "employer"
+        );
+        setSuccessMsg("Profil prestataire mis à jour.");
       } else {
-        await userAPI.createClientProfile({
-          name: clientForm.name,
-          email: clientForm.email,
-          phone: clientForm.phone,
-          address: clientForm.address,
-          city: clientForm.city,
-        });
+        setErrorMsg("Rôle de compte non reconnu.");
       }
 
       await refreshUser();
-      setSuccessMsg(clientProfile ? "Profil client mis à jour." : "Profil client créé avec succès.");
     } catch (err) {
-      setErrorMsg(err?.message || "Impossible de sauvegarder le profil client.");
+      setErrorMsg(err?.message || "Impossible de sauvegarder le profil.");
     } finally {
-      setLoadingClient(false);
-    }
-  };
-
-  const submitEmployerProfile = async (e) => {
-    e.preventDefault();
-    resetMessages();
-    setLoadingEmployer(true);
-
-    try {
-      const payload = {
-        name: employerForm.name,
-        email: employerForm.email,
-        phone: employerForm.phone,
-        description: employerForm.description,
-        city: employerForm.city,
-        address: employerForm.address,
-        hourly_rate: employerForm.hourly_rate === "" ? null : Number(employerForm.hourly_rate),
-      };
-
-      if (employerProfile) {
-        await userAPI.updateProfile(payload);
-      } else {
-        await userAPI.createEmployerProfile(payload);
-      }
-
-      await refreshUser();
-      setSuccessMsg(employerProfile ? "Profil prestataire mis à jour." : "Profil prestataire créé avec succès.");
-    } catch (err) {
-      setErrorMsg(err?.message || "Impossible de sauvegarder le profil prestataire.");
-    } finally {
-      setLoadingEmployer(false);
+      setLoadingRoleProfile(false);
     }
   };
 
@@ -294,7 +270,7 @@ const Profile = () => {
                 Mon profil
               </Typography>
               <Typography color="text.secondary">
-                Gérez vos informations, vos profils et la sécurité de votre compte.
+                Gestion de vos informations personnelles et de la sécurité.
               </Typography>
             </Box>
           </Stack>
@@ -302,13 +278,13 @@ const Profile = () => {
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip
               icon={<PersonIcon />}
-              label={isClient ? "Compte client actif" : "Compte client inactif"}
+              label={isClient ? "Compte client" : "Compte utilisateur"}
               color={isClient ? "success" : "default"}
               variant={isClient ? "filled" : "outlined"}
             />
             <Chip
               icon={<BusinessIcon />}
-              label={isEmployer ? "Compte prestataire actif" : "Compte prestataire inactif"}
+              label={isEmployer ? "Compte prestataire" : "Non prestataire"}
               color={isEmployer ? "success" : "default"}
               variant={isEmployer ? "filled" : "outlined"}
             />
@@ -326,360 +302,275 @@ const Profile = () => {
           </Alert>
         )}
 
-        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
-          <Button
-            variant={tab === "user" ? "contained" : "outlined"}
-            onClick={() => setTab("user")}
-          >
-            Utilisateur
-          </Button>
-          <Button
-            variant={tab === "client" ? "contained" : "outlined"}
-            onClick={() => setTab("client")}
-          >
-            Profil client
-          </Button>
-          <Button
-            variant={tab === "employer" ? "contained" : "outlined"}
-            onClick={() => setTab("employer")}
-          >
-            Profil prestataire
-          </Button>
-          <Button
-            variant={tab === "security" ? "contained" : "outlined"}
-            onClick={() => setTab("security")}
-          >
-            Sécurité
-          </Button>
-        </Stack>
-
-        <Divider sx={{ mb: 2.5 }} />
-
-        {tab === "user" && (
-          <Box component="form" onSubmit={submitUserUpdate}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Prénom"
-                  fullWidth
-                  value={userForm.first_name}
-                  onChange={(e) => handleUserField("first_name", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Nom"
-                  fullWidth
-                  value={userForm.last_name}
-                  onChange={(e) => handleUserField("last_name", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Email"
-                  type="email"
-                  fullWidth
-                  value={userForm.email}
-                  onChange={(e) => handleUserField("email", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Téléphone"
-                  fullWidth
-                  value={userForm.phone}
-                  onChange={(e) => handleUserField("phone", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Adresse"
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  value={userForm.address}
-                  onChange={(e) => handleUserField("address", e.target.value)}
-                />
-              </Grid>
-            </Grid>
-
-            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-              <Button
-                type="submit"
-                variant="contained"
-                startIcon={<SaveIcon />}
-                disabled={loadingUser}
-              >
-                {loadingUser ? "Enregistrement..." : "Enregistrer"}
-              </Button>
-            </Stack>
-          </Box>
-        )}
-
-        {tab === "client" && (
-          <Box component="form" onSubmit={submitClientProfile}>
-            {!clientProfile && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Vous n’avez pas encore de profil client. Complétez le formulaire pour le créer.
-              </Alert>
-            )}
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Nom complet client"
-                  fullWidth
-                  value={clientForm.name}
-                  onChange={(e) => handleClientField("name", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Email client"
-                  type="email"
-                  fullWidth
-                  value={clientForm.email}
-                  onChange={(e) => handleClientField("email", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Téléphone client"
-                  fullWidth
-                  value={clientForm.phone}
-                  onChange={(e) => handleClientField("phone", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Ville"
-                  fullWidth
-                  value={clientForm.city}
-                  onChange={(e) => handleClientField("city", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Adresse client"
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  value={clientForm.address}
-                  onChange={(e) => handleClientField("address", e.target.value)}
-                />
-              </Grid>
-            </Grid>
-
-            <Stack direction="row" justifyContent="space-between" sx={{ mt: 2 }}>
-              {!clientProfile ? (
-                <Chip icon={<AddIcon />} color="warning" label="Création d’un nouveau profil client" />
-              ) : (
-                <Chip icon={<PersonIcon />} color="success" label="Profil client existant" />
-              )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                startIcon={<SaveIcon />}
-                disabled={loadingClient}
-              >
-                {loadingClient
-                  ? "Enregistrement..."
-                  : clientProfile
-                  ? "Mettre à jour"
-                  : "Créer le profil client"}
-              </Button>
-            </Stack>
-          </Box>
-        )}
-
-        {tab === "employer" && (
-          <Box component="form" onSubmit={submitEmployerProfile}>
-            {!employerProfile && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Vous n’avez pas encore de profil prestataire. Complétez le formulaire pour le créer.
-              </Alert>
-            )}
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Nom prestataire"
-                  fullWidth
-                  value={employerForm.name}
-                  onChange={(e) => handleEmployerField("name", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Email prestataire"
-                  type="email"
-                  fullWidth
-                  value={employerForm.email}
-                  onChange={(e) => handleEmployerField("email", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Téléphone prestataire"
-                  fullWidth
-                  value={employerForm.phone}
-                  onChange={(e) => handleEmployerField("phone", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Tarif horaire"
-                  type="number"
-                  fullWidth
-                  value={employerForm.hourly_rate}
-                  onChange={(e) => handleEmployerField("hourly_rate", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Ville"
-                  fullWidth
-                  value={employerForm.city}
-                  onChange={(e) => handleEmployerField("city", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Adresse prestataire"
-                  fullWidth
-                  value={employerForm.address}
-                  onChange={(e) => handleEmployerField("address", e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Description"
-                  fullWidth
-                  multiline
-                  minRows={3}
-                  value={employerForm.description}
-                  onChange={(e) => handleEmployerField("description", e.target.value)}
-                />
-              </Grid>
-            </Grid>
-
-            <Stack direction="row" justifyContent="space-between" sx={{ mt: 2 }}>
-              {!employerProfile ? (
-                <Chip
-                  icon={<AddIcon />}
-                  color="warning"
-                  label="Création d’un nouveau profil prestataire"
-                />
-              ) : (
-                <Chip icon={<BusinessIcon />} color="success" label="Profil prestataire existant" />
-              )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                startIcon={<SaveIcon />}
-                disabled={loadingEmployer}
-              >
-                {loadingEmployer
-                  ? "Enregistrement..."
-                  : employerProfile
-                  ? "Mettre à jour"
-                  : "Créer le profil prestataire"}
-              </Button>
-            </Stack>
-          </Box>
-        )}
-
-        {tab === "security" && (
-          <Stack spacing={3}>
-            <Box component="form" onSubmit={submitPasswordChange}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5 }}>
-                Changer le mot de passe
-              </Typography>
-
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Mot de passe actuel"
-                    type="password"
-                    fullWidth
-                    value={passwordForm.current_password}
-                    onChange={(e) => handlePasswordField("current_password", e.target.value)}
-                  />
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
+              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>Informations utilisateur</Typography>
+              <Divider sx={{ mb: 1.5 }} />
+              <Box component="form" onSubmit={submitUserUpdate}>
+                <Grid container spacing={1.4}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Prénom"
+                      value={userForm.first_name}
+                      onChange={(e) => handleUserField("first_name", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Nom"
+                      value={userForm.last_name}
+                      onChange={(e) => handleUserField("last_name", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      type="email"
+                      label="Email"
+                      value={userForm.email}
+                      onChange={(e) => handleUserField("email", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Téléphone"
+                      value={userForm.phone}
+                      onChange={(e) => handleUserField("phone", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Adresse"
+                      value={userForm.address}
+                      onChange={(e) => handleUserField("address", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button variant="contained" type="submit" startIcon={<SaveIcon />} disabled={loadingUser}>
+                      {loadingUser ? "Sauvegarde..." : "Sauvegarder le profil utilisateur"}
+                    </Button>
+                  </Grid>
                 </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Nouveau mot de passe"
-                    type="password"
-                    fullWidth
-                    value={passwordForm.new_password}
-                    onChange={(e) => handlePasswordField("new_password", e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Confirmer le nouveau mot de passe"
-                    type="password"
-                    fullWidth
-                    value={passwordForm.confirm_password}
-                    onChange={(e) => handlePasswordField("confirm_password", e.target.value)}
-                  />
-                </Grid>
-              </Grid>
+              </Box>
+            </Paper>
+          </Grid>
 
-              <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="warning"
-                  startIcon={<LockResetIcon />}
-                  disabled={loadingPassword}
-                >
-                  {loadingPassword ? "Mise à jour..." : "Mettre à jour le mot de passe"}
-                </Button>
-              </Stack>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-                Zone de danger
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
+              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>
+                {isClient ? "Profil client" : "Profil prestataire"}
               </Typography>
-              <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Cette action est irréversible. Toutes vos données associées seront supprimées.
-              </Typography>
+              <Divider sx={{ mb: 1.5 }} />
 
+              <Box component="form" onSubmit={submitRoleProfile}>
+                <Grid container spacing={1.4}>
+                  {isClient ? (
+                    <>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Nom"
+                          value={clientForm.name}
+                          onChange={(e) => handleClientField("name", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          type="email"
+                          label="Email"
+                          value={clientForm.email}
+                          onChange={(e) => handleClientField("email", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Téléphone"
+                          value={clientForm.phone}
+                          onChange={(e) => handleClientField("phone", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Ville"
+                          value={clientForm.city}
+                          onChange={(e) => handleClientField("city", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Adresse"
+                          value={clientForm.address}
+                          onChange={(e) => handleClientField("address", e.target.value)}
+                        />
+                      </Grid>
+                    </>
+                  ) : (
+                    <>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Nom"
+                          value={employerForm.name}
+                          onChange={(e) => handleEmployerField("name", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          type="email"
+                          label="Email"
+                          value={employerForm.email}
+                          onChange={(e) => handleEmployerField("email", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Téléphone"
+                          value={employerForm.phone}
+                          onChange={(e) => handleEmployerField("phone", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Ville"
+                          value={employerForm.city}
+                          onChange={(e) => handleEmployerField("city", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Tarif horaire"
+                          type="number"
+                          value={employerForm.hourly_rate}
+                          onChange={(e) => handleEmployerField("hourly_rate", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Adresse"
+                          value={employerForm.address}
+                          onChange={(e) => handleEmployerField("address", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          minRows={3}
+                          label="Description"
+                          value={employerForm.description}
+                          onChange={(e) => handleEmployerField("description", e.target.value)}
+                        />
+                      </Grid>
+                    </>
+                  )}
+
+                  <Grid item xs={12}>
+                    <Button
+                      variant="contained"
+                      type="submit"
+                      startIcon={<SaveIcon />}
+                      disabled={loadingRoleProfile}
+                    >
+                      {loadingRoleProfile ? "Sauvegarde..." : "Sauvegarder"}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
+              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>Sécurité</Typography>
+              <Divider sx={{ mb: 1.5 }} />
+              <Box component="form" onSubmit={submitPasswordChange}>
+                <Grid container spacing={1.4}>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      type="password"
+                      label="Mot de passe actuel"
+                      value={passwordForm.current_password}
+                      onChange={(e) => handlePasswordField("current_password", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      type="password"
+                      label="Nouveau mot de passe"
+                      value={passwordForm.new_password}
+                      onChange={(e) => handlePasswordField("new_password", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      type="password"
+                      label="Confirmer"
+                      value={passwordForm.confirm_password}
+                      onChange={(e) => handlePasswordField("confirm_password", e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      variant="outlined"
+                      type="submit"
+                      startIcon={<LockResetIcon />}
+                      disabled={loadingPassword}
+                    >
+                      {loadingPassword ? "Modification..." : "Changer le mot de passe"}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#2b1418", 0.45) }}>
+              <Typography sx={{ fontWeight: 800, mb: 0.6 }}>Zone sensible</Typography>
+              <Typography color="text.secondary" sx={{ mb: 1.2 }}>
+                Cette action supprime définitivement votre compte.
+              </Typography>
               <Button
                 color="error"
-                variant="contained"
+                variant="outlined"
                 startIcon={<DeleteIcon />}
                 onClick={() => setOpenDeleteConfirm(true)}
               >
                 Supprimer mon compte
               </Button>
-            </Box>
-          </Stack>
-        )}
+            </Paper>
+          </Grid>
+        </Grid>
       </Paper>
 
       <Dialog open={openDeleteConfirm} onClose={() => setOpenDeleteConfirm(false)}>
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Êtes-vous sûr de vouloir supprimer définitivement votre compte ?
+            Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDeleteConfirm(false)}>Annuler</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={confirmDeleteAccount}
-            disabled={loadingDelete}
-          >
-            {loadingDelete ? "Suppression..." : "Oui, supprimer"}
+          <Button color="error" onClick={confirmDeleteAccount} disabled={loadingDelete}>
+            {loadingDelete ? "Suppression..." : "Supprimer"}
           </Button>
         </DialogActions>
       </Dialog>

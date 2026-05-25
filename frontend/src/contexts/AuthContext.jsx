@@ -5,12 +5,13 @@ const AuthContext = createContext(null);
 
 const deriveRoleFlags = ({ user, profiles }) => {
   const role = user?.role;
-  const clientProfile = profiles?.client || null;
-  const employerProfile = profiles?.employer || null;
 
-  // Compat legacy user.role + nouvelle logique profils
-  const isClient = !!clientProfile || role === "client";
-  const isEmployer = !!employerProfile || role === "employer";
+  // Règle stricte : un compte = un rôle principal
+  const isClient = role === "client";
+  const isEmployer = role === "employer";
+
+  const clientProfile = isClient ? profiles?.client || null : null;
+  const employerProfile = isEmployer ? profiles?.employer || null : null;
 
   return { isClient, isEmployer, clientProfile, employerProfile };
 };
@@ -40,7 +41,6 @@ export const AuthProvider = ({ children }) => {
       setProfiles(data || null);
       return data || null;
     } catch {
-      // Pas bloquant pour l'app : on garde l'utilisateur même si profils indisponibles
       setProfiles(null);
       return null;
     }
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData || null);
       await loadProfiles();
       return userData || null;
-    } catch (err) {
+    } catch {
       clearAuthState();
       return null;
     }
@@ -64,7 +64,6 @@ export const AuthProvider = ({ children }) => {
 
     const init = async () => {
       try {
-        // Si pas de token, ne pas appeler l'API inutilement
         const token = localStorage.getItem("token");
         if (!token) {
           if (mounted) {
@@ -115,7 +114,6 @@ export const AuthProvider = ({ children }) => {
         const userData = response?.user || null;
         setUser(userData);
 
-        // Tente d'utiliser les profils déjà renvoyés, sinon les recharge
         const responseProfiles = response?.profiles || null;
         if (responseProfiles) {
           setProfiles(responseProfiles);
@@ -161,7 +159,7 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(async () => {
     try {
       setError("");
-      await authAPI.logout(); // clearTokens fait déjà le ménage côté service
+      await authAPI.logout();
     } catch {
       // no-op
     } finally {
@@ -175,8 +173,6 @@ export const AuthProvider = ({ children }) => {
         setError("");
         const updated = await userAPI.updateUser(data);
         setUser(updated || null);
-
-        // Sync profils après update user (email/nom/etc peuvent impacter affichage)
         await loadProfiles();
         return updated;
       } catch (err) {
@@ -193,7 +189,6 @@ export const AuthProvider = ({ children }) => {
   }, [clearAuthState]);
 
   const value = {
-    // state
     user,
     profiles,
     clientProfile,
@@ -201,12 +196,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     error,
 
-    // flags
     isAuthenticated,
     isClient,
     isEmployer,
 
-    // actions
     login,
     register,
     logout,
@@ -214,7 +207,6 @@ export const AuthProvider = ({ children }) => {
     updateUser,
     deleteAccount,
 
-    // compat legacy (certaines pages utilisent setUser directement)
     setUser,
     setProfiles,
   };

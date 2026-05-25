@@ -28,10 +28,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   AddCircleOutline as AddIcon,
   EventBusy as CancelIcon,
-  EventAvailable as EventIcon,
+  EventAvailable as AcceptIcon,
   Refresh as RefreshIcon,
   Star as StarIcon,
   Payment as PaymentIcon,
+  Close as RefuseIcon,
 } from "@mui/icons-material";
 
 import { appointmentAPI, employerAPI, getServices } from "../services/api";
@@ -74,10 +75,7 @@ const formatDate = (value) => {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  return d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 };
 
 const normalizeList = (data) => (Array.isArray(data) ? data : data?.results ?? []);
@@ -85,7 +83,7 @@ const normalizeList = (data) => (Array.isArray(data) ? data : data?.results ?? [
 const Appointments = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAuthenticated, isClient, isEmployer } = useAuth();
+  const { isAuthenticated, isClient, isEmployer } = useAuth();
 
   const [appointments, setAppointments] = useState([]);
   const [services, setServices] = useState([]);
@@ -95,6 +93,8 @@ const Appointments = () => {
   const [loadingCreate, setLoadingCreate] = useState(false);
   const [loadingPayId, setLoadingPayId] = useState(null);
   const [loadingCancelId, setLoadingCancelId] = useState(null);
+  const [loadingAcceptId, setLoadingAcceptId] = useState(null);
+  const [loadingRefuseId, setLoadingRefuseId] = useState(null);
   const [loadingReviewId, setLoadingReviewId] = useState(null);
 
   const [error, setError] = useState("");
@@ -104,10 +104,7 @@ const Appointments = () => {
   const [openReview, setOpenReview] = useState(false);
 
   const [selectedReviewAppointment, setSelectedReviewAppointment] = useState(null);
-  const [reviewData, setReviewData] = useState({
-    rating: 5,
-    feedback: "",
-  });
+  const [reviewData, setReviewData] = useState({ rating: 5, feedback: "" });
 
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const initialEmployerId = params.get("employerId") || "";
@@ -185,11 +182,10 @@ const Appointments = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    // Ouvre le modal création si on arrive depuis Search avec employer/service
-    if (initialEmployerId || initialServiceId) {
+    if ((initialEmployerId || initialServiceId) && isClient) {
       setOpenCreate(true);
     }
-  }, [initialEmployerId, initialServiceId]);
+  }, [initialEmployerId, initialServiceId, isClient]);
 
   const handleCreateField = (key, value) => {
     setCreateForm((prev) => ({ ...prev, [key]: value }));
@@ -244,6 +240,34 @@ const Appointments = () => {
     }
   };
 
+  const handleAccept = async (appointmentId) => {
+    resetMessages();
+    setLoadingAcceptId(appointmentId);
+    try {
+      await appointmentAPI.accept(appointmentId);
+      setSuccessMsg("Rendez-vous accepté.");
+      await fetchAll();
+    } catch (err) {
+      setError(err?.message || "Impossible d’accepter ce rendez-vous.");
+    } finally {
+      setLoadingAcceptId(null);
+    }
+  };
+
+  const handleRefuse = async (appointmentId) => {
+    resetMessages();
+    setLoadingRefuseId(appointmentId);
+    try {
+      await appointmentAPI.refuse(appointmentId, "Refus depuis l’espace prestataire");
+      setSuccessMsg("Rendez-vous refusé.");
+      await fetchAll();
+    } catch (err) {
+      setError(err?.message || "Impossible de refuser ce rendez-vous.");
+    } finally {
+      setLoadingRefuseId(null);
+    }
+  };
+
   const handlePay = async (appointmentId, payment_method = "carte") => {
     resetMessages();
     setLoadingPayId(appointmentId);
@@ -286,8 +310,10 @@ const Appointments = () => {
     }
   };
 
-  const isCancelable = (appointment) =>
-    ["en_attente", "accepté", "en_cours"].includes(appointment.status);
+  const canClientCancel = (appointment) => isClient && appointment.status === "en_attente";
+  const canEmployerCancel = (appointment) => isEmployer && ["accepté", "en_cours"].includes(appointment.status);
+  const canEmployerAccept = (appointment) => isEmployer && appointment.status === "en_attente";
+  const canEmployerRefuse = (appointment) => isEmployer && appointment.status === "en_attente";
 
   const canReview = (appointment) =>
     isClient &&
@@ -318,17 +344,13 @@ const Appointments = () => {
             <Typography color="text.secondary">
               {isClient
                 ? "Créez, suivez, annulez et notez vos rendez-vous."
-                : "Consultez les rendez-vous liés à votre compte prestataire."}
+                : "Consultez et gérez les rendez-vous reçus."}
             </Typography>
           </Box>
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {isClient && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenCreate(true)}
-              >
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreate(true)}>
                 Nouveau rendez-vous
               </Button>
             )}
@@ -339,59 +361,24 @@ const Appointments = () => {
         </Stack>
 
         <Grid container spacing={1.2} sx={{ mt: 1 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Typography variant="caption" color="text.secondary">
-                Total
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                {stats.total}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Typography variant="caption" color="text.secondary">
-                En attente
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                {stats.pending}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Typography variant="caption" color="text.secondary">
-                Acceptés
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                {stats.confirmed}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-              <Typography variant="caption" color="text.secondary">
-                Annulés
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                {stats.canceled}
-              </Typography>
-            </Paper>
-          </Grid>
+          {[
+            ["Total", stats.total],
+            ["En attente", stats.pending],
+            ["Acceptés", stats.confirmed],
+            ["Annulés", stats.canceled],
+          ].map(([label, value]) => (
+            <Grid item xs={12} sm={6} md={3} key={label}>
+              <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
+                <Typography variant="caption" color="text.secondary">{label}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>{value}</Typography>
+              </Paper>
+            </Grid>
+          ))}
         </Grid>
       </Paper>
 
-      {successMsg && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {successMsg}
-        </Alert>
-      )}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {loading ? (
         <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
@@ -420,7 +407,7 @@ const Appointments = () => {
                 <TableRow>
                   <TableCell>Date</TableCell>
                   <TableCell>Service</TableCell>
-                  <TableCell>Prestataire</TableCell>
+                  <TableCell>{isEmployer ? "Client" : "Prestataire"}</TableCell>
                   <TableCell>Localisation</TableCell>
                   <TableCell>Statut</TableCell>
                   <TableCell>Paiement</TableCell>
@@ -439,7 +426,11 @@ const Appointments = () => {
                     <TableRow key={appointment.id} hover>
                       <TableCell>{formatDate(appointment.date)}</TableCell>
                       <TableCell>{appointment?.service?.name || "—"}</TableCell>
-                      <TableCell>{appointment?.employer?.name || "—"}</TableCell>
+                      <TableCell>
+                        {isEmployer
+                          ? appointment?.client?.name || "—"
+                          : appointment?.employer?.name || "—"}
+                      </TableCell>
                       <TableCell>{appointment?.location || "—"}</TableCell>
                       <TableCell>
                         <Chip label={statusLabel} color={statusColor} size="small" />
@@ -457,11 +448,7 @@ const Appointments = () => {
                       <TableCell sx={{ maxWidth: 220 }}>
                         <Typography
                           variant="body2"
-                          sx={{
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
+                          sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                           title={appointment.description || ""}
                         >
                           {appointment.description || "—"}
@@ -469,12 +456,7 @@ const Appointments = () => {
                       </TableCell>
 
                       <TableCell align="right">
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          justifyContent="flex-end"
-                          flexWrap="wrap"
-                        >
+                        <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
                           {isClient && !appointment.is_paid && appointment.status !== "annulé" && (
                             <Button
                               size="small"
@@ -487,7 +469,33 @@ const Appointments = () => {
                             </Button>
                           )}
 
-                          {isCancelable(appointment) && (
+                          {canEmployerAccept(appointment) && (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="success"
+                              startIcon={<AcceptIcon />}
+                              onClick={() => handleAccept(appointment.id)}
+                              disabled={loadingAcceptId === appointment.id}
+                            >
+                              {loadingAcceptId === appointment.id ? "..." : "Accepter"}
+                            </Button>
+                          )}
+
+                          {canEmployerRefuse(appointment) && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              startIcon={<RefuseIcon />}
+                              onClick={() => handleRefuse(appointment.id)}
+                              disabled={loadingRefuseId === appointment.id}
+                            >
+                              {loadingRefuseId === appointment.id ? "..." : "Refuser"}
+                            </Button>
+                          )}
+
+                          {(canClientCancel(appointment) || canEmployerCancel(appointment)) && (
                             <Button
                               size="small"
                               color="error"
@@ -510,15 +518,6 @@ const Appointments = () => {
                               Noter
                             </Button>
                           )}
-
-                          {!isClient && isEmployer && (
-                            <Chip
-                              size="small"
-                              icon={<EventIcon />}
-                              label="Vue prestataire"
-                              variant="outlined"
-                            />
-                          )}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -530,19 +529,11 @@ const Appointments = () => {
         </Paper>
       )}
 
-      {/* Dialog création rendez-vous */}
-      <Dialog
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        fullWidth
-        maxWidth="md"
-      >
+      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} fullWidth maxWidth="md">
         <DialogTitle>Nouveau rendez-vous</DialogTitle>
         <DialogContent dividers>
           {!isClient ? (
-            <Alert severity="warning">
-              Seul un compte client peut créer un rendez-vous.
-            </Alert>
+            <Alert severity="warning">Seul un compte client peut créer un rendez-vous.</Alert>
           ) : (
             <Box component="form" id="create-appointment-form" onSubmit={handleCreateAppointment}>
               <Grid container spacing={2} sx={{ mt: 0.2 }}>
@@ -629,25 +620,14 @@ const Appointments = () => {
         <DialogActions>
           <Button onClick={() => setOpenCreate(false)}>Fermer</Button>
           {isClient && (
-            <Button
-              type="submit"
-              form="create-appointment-form"
-              variant="contained"
-              disabled={loadingCreate}
-            >
+            <Button type="submit" form="create-appointment-form" variant="contained" disabled={loadingCreate}>
               {loadingCreate ? "Création..." : "Créer"}
             </Button>
           )}
         </DialogActions>
       </Dialog>
 
-      {/* Dialog avis */}
-      <Dialog
-        open={openReview}
-        onClose={() => setOpenReview(false)}
-        fullWidth
-        maxWidth="sm"
-      >
+      <Dialog open={openReview} onClose={() => setOpenReview(false)} fullWidth maxWidth="sm">
         <DialogTitle>Noter ce rendez-vous</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
