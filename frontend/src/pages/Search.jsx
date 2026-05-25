@@ -20,6 +20,7 @@ import {
   Stack,
   TextField,
   Typography,
+  Tooltip,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -32,17 +33,21 @@ import {
   FavoriteBorder as FavoriteBorderIcon,
   Favorite as FavoriteIcon,
   ChatBubbleOutline as MessageIcon,
+  InfoOutlined as InfoIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 
 import {
   getServices,
+  isMapboxConfigured,
   searchPlacesMapbox,
   searchAPI,
   favoritesAPI,
   messagingAPI,
 } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+
+const normalizeList = (data) => (Array.isArray(data) ? data : data?.results ?? []);
 
 const Search = () => {
   const navigate = useNavigate();
@@ -63,8 +68,11 @@ const Search = () => {
   const [loadingContactId, setLoadingContactId] = useState(null);
   const [error, setError] = useState("");
 
+  // Mapbox autocomplete state
   const [locationOptions, setLocationOptions] = useState([]);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [selectedLocationOption, setSelectedLocationOption] = useState(null);
+  const mapboxEnabled = isMapboxConfigured();
 
   const [filters, setFilters] = useState({
     q: searchParams.get("q") || "",
@@ -83,14 +91,12 @@ const Search = () => {
 
   const loadServices = async () => {
     const data = await getServices();
-    const list = Array.isArray(data) ? data : data?.results ?? [];
-    setServices(list);
+    setServices(normalizeList(data));
   };
 
   const loadEmployers = async (params = {}) => {
     const data = await searchAPI.employers(params);
-    const list = Array.isArray(data) ? data : data?.results ?? [];
-    setEmployers(list);
+    setEmployers(normalizeList(data));
   };
 
   const loadFavorites = async () => {
@@ -101,8 +107,7 @@ const Search = () => {
     setLoadingFavorites(true);
     try {
       const data = await favoritesAPI.listEmployers();
-      const list = Array.isArray(data) ? data : data?.results ?? [];
-      setFavorites(list);
+      setFavorites(normalizeList(data));
     } catch {
       setFavorites([]);
     } finally {
@@ -135,6 +140,11 @@ const Search = () => {
   }, []);
 
   useEffect(() => {
+    if (!mapboxEnabled) {
+      setLocationOptions([]);
+      return;
+    }
+
     const run = async () => {
       const q = (filters.location || "").trim();
       if (q.length < 3) {
@@ -144,8 +154,10 @@ const Search = () => {
 
       try {
         setLocationLoading(true);
-        const results = await searchPlacesMapbox(q);
-        setLocationOptions(results.map((r) => r.place_name));
+        const places = await searchPlacesMapbox(q, { limit: 6, language: "fr" });
+        setLocationOptions(places);
+      } catch {
+        setLocationOptions([]);
       } finally {
         setLocationLoading(false);
       }
@@ -153,10 +165,11 @@ const Search = () => {
 
     const timer = setTimeout(run, 350);
     return () => clearTimeout(timer);
-  }, [filters.location]);
+  }, [filters.location, mapboxEnabled]);
 
   const handleReset = async () => {
     setFilters({ q: "", location: "", service: "" });
+    setSelectedLocationOption(null);
     setError("");
     navigate("/search");
     setLoading(true);
@@ -174,17 +187,21 @@ const Search = () => {
     setError("");
     setLoading(true);
 
+    const normalizedLocation =
+      selectedLocationOption?.address || selectedLocationOption?.label || filters.location;
+
     const params = {
       q: filters.q || undefined,
-      location: filters.location || undefined,
+      location: normalizedLocation || undefined,
       service: selectedServiceId || filters.service || undefined,
     };
 
     const query = new URLSearchParams();
     if (filters.q) query.set("q", filters.q);
-    if (filters.location) query.set("location", filters.location);
+    if (normalizedLocation) query.set("location", normalizedLocation);
     if (selectedServiceId) query.set("service", selectedServiceId);
     else if (filters.service) query.set("service", filters.service);
+
     navigate(`/search${query.toString() ? `?${query.toString()}` : ""}`);
 
     try {
@@ -247,6 +264,11 @@ const Search = () => {
     return "Service non précisé";
   };
 
+  const getLocationLabel = (employer) => {
+    if (employer?.address && employer?.city) return `${employer.address}, ${employer.city}`;
+    return employer?.city || employer?.address || "Non renseignée";
+  };
+
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 7 }}>
       <Paper
@@ -271,7 +293,7 @@ const Search = () => {
               Trouver un prestataire
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Recherchez par nom, service, description ou localisation.
+              Recherchez par service, nom, description et localisation.
             </Typography>
           </Box>
 
@@ -281,6 +303,13 @@ const Search = () => {
             </Button>
           </Stack>
         </Stack>
+
+        {!mapboxEnabled && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Suggestions d’adresse désactivées. Ajoutez <strong>VITE_MAPBOX_TOKEN</strong> dans{" "}
+            <strong>frontend/.env</strong> pour activer l’autocomplete.
+          </Alert>
+        )}
 
         <form onSubmit={handleSearchSubmit}>
           <Grid container spacing={1.5} alignItems="center">
@@ -321,9 +350,25 @@ const Search = () => {
               <Autocomplete
                 freeSolo
                 options={locationOptions}
-                inputValue={filters.location}
-                onInputChange={(_, value) => setFilters((p) => ({ ...p, location: value }))}
                 loading={locationLoading}
+                filterOptions={(x) => x}
+                value={selectedLocationOption}
+                onChange={(_, value) => {
+                  if (value && typeof value !== "string") {
+                    setSelectedLocationOption(value);
+                    setFilters((p) => ({ ...p, location: value.address || value.label || "" }));
+                  } else {
+                    setSelectedLocationOption(null);
+                  }
+                }}
+                inputValue={filters.location}
+                onInputChange={(_, value) => {
+                  setFilters((p) => ({ ...p, location: value }));
+                  if (!value) setSelectedLocationOption(null);
+                }}
+                getOptionLabel={(option) =>
+                  typeof option === "string" ? option : option.label || ""
+                }
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -334,6 +379,12 @@ const Search = () => {
                         <InputAdornment position="start">
                           <LocationIcon sx={{ color: "text.secondary" }} />
                         </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <>
+                          {locationLoading ? <CircularProgress color="inherit" size={18} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
                       ),
                     }}
                   />
@@ -387,6 +438,13 @@ const Search = () => {
             )}
           </Stack>
 
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+            <InfoIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            <Typography variant="caption" color="text.secondary">
+              Sélectionnez un prestataire, contactez-le, puis prenez rendez-vous en un clic.
+            </Typography>
+          </Stack>
+
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={2}>
@@ -412,10 +470,20 @@ const Search = () => {
                   >
                     <CardContent>
                       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                        <Box>
+                        <Box sx={{ minWidth: 0 }}>
                           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.4 }}>
                             <PersonIcon fontSize="small" sx={{ color: "primary.main" }} />
-                            <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                            <Typography
+                              variant="h6"
+                              sx={{
+                                fontWeight: 800,
+                                lineHeight: 1.2,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={employer.name || "Prestataire"}
+                            >
                               {employer.name || "Prestataire"}
                             </Typography>
                           </Stack>
@@ -434,9 +502,18 @@ const Search = () => {
                           <Typography variant="caption" color="text.secondary">
                             Localisation
                           </Typography>
-                          <Typography variant="body2">
-                            {employer.city || employer.address || "Non renseignée"}
-                          </Typography>
+                          <Tooltip title={getLocationLabel(employer)}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {getLocationLabel(employer)}
+                            </Typography>
+                          </Tooltip>
                         </Box>
 
                         <Box>

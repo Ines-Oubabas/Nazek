@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Avatar,
@@ -17,6 +17,9 @@ import {
   Stack,
   TextField,
   Typography,
+  Autocomplete,
+  CircularProgress,
+  MenuItem,
 } from "@mui/material";
 import {
   Person as PersonIcon,
@@ -24,12 +27,13 @@ import {
   Save as SaveIcon,
   LockReset as LockResetIcon,
   DeleteForever as DeleteIcon,
+  HomeWork as HomeWorkIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
-import { userAPI } from "../services/api";
+import { searchPlacesMapbox, userAPI, isMapboxConfigured } from "../services/api";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -39,38 +43,21 @@ const Profile = () => {
     employerProfile,
     isClient,
     isEmployer,
-    updateUser,
     refreshUser,
     deleteAccount,
   } = useAuth();
 
-  const [userForm, setUserForm] = useState({
-    first_name: user?.first_name || "",
-    last_name: user?.last_name || "",
-    email: user?.email || "",
-    phone: user?.phone || "",
-    address: user?.address || "",
-  });
-
-  const [clientForm, setClientForm] = useState({
-    name: clientProfile?.name || "",
-    email: clientProfile?.email || user?.email || "",
-    phone: clientProfile?.phone || user?.phone || "",
-    address: clientProfile?.address || user?.address || "",
-    city: clientProfile?.city || "",
-  });
-
-  const [employerForm, setEmployerForm] = useState({
-    name: employerProfile?.name || "",
-    email: employerProfile?.email || user?.email || "",
-    phone: employerProfile?.phone || user?.phone || "",
-    description: employerProfile?.description || "",
-    city: employerProfile?.city || "",
-    address: employerProfile?.address || user?.address || "",
-    hourly_rate:
-      employerProfile?.hourly_rate !== null && employerProfile?.hourly_rate !== undefined
-        ? String(employerProfile.hourly_rate)
-        : "",
+  const [profileForm, setProfileForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    name: "",
+    description: "",
+    hourly_rate: "",
+    is_available: true,
   });
 
   const [passwordForm, setPasswordForm] = useState({
@@ -79,106 +66,188 @@ const Profile = () => {
     confirm_password: "",
   });
 
-  const [loadingUser, setLoadingUser] = useState(false);
-  const [loadingRoleProfile, setLoadingRoleProfile] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const [loadingPassword, setLoadingPassword] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
 
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
 
+  // Mapbox autocomplete (adresse)
+  const [addressOptions, setAddressOptions] = useState([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [mapboxEnabled] = useState(isMapboxConfigured());
+
+  const roleLabel = isEmployer ? "prestataire" : "client";
+
   const initials = useMemo(() => {
-    const full = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
-    if (full) return full.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+    const first = profileForm.first_name || user?.first_name || "";
+    const last = profileForm.last_name || user?.last_name || "";
+    const full = `${first} ${last}`.trim();
+    if (full) {
+      return full
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+    }
     return (user?.username || "U").slice(0, 2).toUpperCase();
-  }, [user]);
+  }, [profileForm.first_name, profileForm.last_name, user]);
 
   const resetMessages = () => {
     setSuccessMsg("");
     setErrorMsg("");
   };
 
-  const handleUserField = (key, value) => {
-    setUserForm((prev) => ({ ...prev, [key]: value }));
-  };
+  useEffect(() => {
+    if (isClient) {
+      setProfileForm({
+        first_name: user?.first_name || "",
+        last_name: user?.last_name || "",
+        email: clientProfile?.email || user?.email || "",
+        phone: clientProfile?.phone || user?.phone || "",
+        address: clientProfile?.address || user?.address || "",
+        city: clientProfile?.city || "",
+        name:
+          clientProfile?.name ||
+          `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
+        description: "",
+        hourly_rate: "",
+        is_available: true,
+      });
+      return;
+    }
 
-  const handleClientField = (key, value) => {
-    setClientForm((prev) => ({ ...prev, [key]: value }));
-  };
+    if (isEmployer) {
+      setProfileForm({
+        first_name: user?.first_name || "",
+        last_name: user?.last_name || "",
+        email: employerProfile?.email || user?.email || "",
+        phone: employerProfile?.phone || user?.phone || "",
+        address: employerProfile?.address || user?.address || "",
+        city: employerProfile?.city || "",
+        name: employerProfile?.name || "",
+        description: employerProfile?.description || "",
+        hourly_rate:
+          employerProfile?.hourly_rate !== null &&
+          employerProfile?.hourly_rate !== undefined
+            ? String(employerProfile.hourly_rate)
+            : "",
+        is_available:
+          typeof employerProfile?.is_available === "boolean"
+            ? employerProfile.is_available
+            : true,
+      });
+    }
+  }, [isClient, isEmployer, user, clientProfile, employerProfile]);
 
-  const handleEmployerField = (key, value) => {
-    setEmployerForm((prev) => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    if (!mapboxEnabled) {
+      setAddressOptions([]);
+      return;
+    }
+
+    const q = (profileForm.address || "").trim();
+    if (q.length < 3) {
+      setAddressOptions([]);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        setAddressLoading(true);
+        const places = await searchPlacesMapbox(q, { limit: 6, language: "fr" });
+        if (!active) return;
+        setAddressOptions(places);
+      } catch {
+        if (!active) return;
+        setAddressOptions([]);
+      } finally {
+        if (active) setAddressLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [profileForm.address, mapboxEnabled]);
+
+  const handleProfileField = (key, value) => {
+    setProfileForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const handlePasswordField = (key, value) => {
     setPasswordForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const submitUserUpdate = async (e) => {
-    e.preventDefault();
-    resetMessages();
-    setLoadingUser(true);
-
-    try {
-      await updateUser({
-        first_name: userForm.first_name,
-        last_name: userForm.last_name,
-        email: userForm.email,
-        phone: userForm.phone,
-        address: userForm.address,
-      });
-      await refreshUser();
-      setSuccessMsg("Profil utilisateur mis à jour avec succès.");
-    } catch (err) {
-      setErrorMsg(err?.message || "Impossible de mettre à jour le profil utilisateur.");
-    } finally {
-      setLoadingUser(false);
+  const handleSelectAddress = (option) => {
+    if (!option) return;
+    handleProfileField("address", option.address || option.label || "");
+    if (option.city) {
+      handleProfileField("city", option.city);
     }
   };
 
-  const submitRoleProfile = async (e) => {
+  const submitProfileUpdate = async (e) => {
     e.preventDefault();
     resetMessages();
-    setLoadingRoleProfile(true);
+    setLoadingProfile(true);
 
     try {
+      // 1) Mise à jour user de base (toujours)
+      await userAPI.updateUser({
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+        email: profileForm.email,
+        phone: profileForm.phone,
+        address: profileForm.address,
+      });
+
+      // 2) Mise à jour profil par rôle (strict, pas de mélange)
       if (isClient) {
         await userAPI.updateProfile(
           {
-            name: clientForm.name,
-            email: clientForm.email,
-            phone: clientForm.phone,
-            address: clientForm.address,
-            city: clientForm.city,
+            name:
+              profileForm.name ||
+              `${profileForm.first_name} ${profileForm.last_name}`.trim(),
+            email: profileForm.email,
+            phone: profileForm.phone,
+            address: profileForm.address,
+            city: profileForm.city,
           },
           "client"
         );
-        setSuccessMsg("Profil client mis à jour.");
       } else if (isEmployer) {
         await userAPI.updateProfile(
           {
-            name: employerForm.name,
-            email: employerForm.email,
-            phone: employerForm.phone,
-            description: employerForm.description,
-            city: employerForm.city,
-            address: employerForm.address,
-            hourly_rate: employerForm.hourly_rate === "" ? null : Number(employerForm.hourly_rate),
+            name: profileForm.name,
+            email: profileForm.email,
+            phone: profileForm.phone,
+            address: profileForm.address,
+            city: profileForm.city,
+            description: profileForm.description,
+            hourly_rate:
+              profileForm.hourly_rate === ""
+                ? null
+                : Number(profileForm.hourly_rate),
+            is_available: !!profileForm.is_available,
           },
           "employer"
         );
-        setSuccessMsg("Profil prestataire mis à jour.");
       } else {
-        setErrorMsg("Rôle de compte non reconnu.");
+        throw new Error("Rôle de compte non reconnu.");
       }
 
       await refreshUser();
+      setSuccessMsg(`Profil ${roleLabel} mis à jour avec succès.`);
     } catch (err) {
-      setErrorMsg(err?.message || "Impossible de sauvegarder le profil.");
+      setErrorMsg(err?.message || "Impossible de mettre à jour le profil.");
     } finally {
-      setLoadingRoleProfile(false);
+      setLoadingProfile(false);
     }
   };
 
@@ -190,16 +259,13 @@ const Profile = () => {
       setErrorMsg("Veuillez renseigner l’ancien et le nouveau mot de passe.");
       return;
     }
-    if (
-      passwordForm.confirm_password &&
-      passwordForm.new_password !== passwordForm.confirm_password
-    ) {
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
       setErrorMsg("La confirmation du mot de passe ne correspond pas.");
       return;
     }
 
-    setLoadingPassword(true);
     try {
+      setLoadingPassword(true);
       await userAPI.changePassword({
         current_password: passwordForm.current_password,
         new_password: passwordForm.new_password,
@@ -267,10 +333,12 @@ const Profile = () => {
 
             <Box>
               <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                Mon profil
+                {isClient ? "Profil client" : "Profil prestataire"}
               </Typography>
               <Typography color="text.secondary">
-                Gestion de vos informations personnelles et de la sécurité.
+                {isClient
+                  ? "Gérez vos informations personnelles de réservation."
+                  : "Gérez vos informations professionnelles et votre visibilité."}
               </Typography>
             </Box>
           </Stack>
@@ -291,6 +359,14 @@ const Profile = () => {
           </Stack>
         </Stack>
 
+        {!mapboxEnabled && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Suggestions d’adresse désactivées. Ajoutez{" "}
+            <strong>VITE_MAPBOX_TOKEN</strong> dans le fichier <strong>.env</strong>{" "}
+            du frontend pour activer l’autocomplete.
+          </Alert>
+        )}
+
         {successMsg && (
           <Alert severity="success" sx={{ mb: 2 }}>
             {successMsg}
@@ -305,174 +381,156 @@ const Profile = () => {
         <Grid container spacing={2}>
           <Grid item xs={12}>
             <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
-              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>Informations utilisateur</Typography>
-              <Divider sx={{ mb: 1.5 }} />
-              <Box component="form" onSubmit={submitUserUpdate}>
-                <Grid container spacing={1.4}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Prénom"
-                      value={userForm.first_name}
-                      onChange={(e) => handleUserField("first_name", e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Nom"
-                      value={userForm.last_name}
-                      onChange={(e) => handleUserField("last_name", e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      type="email"
-                      label="Email"
-                      value={userForm.email}
-                      onChange={(e) => handleUserField("email", e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Téléphone"
-                      value={userForm.phone}
-                      onChange={(e) => handleUserField("phone", e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Adresse"
-                      value={userForm.address}
-                      onChange={(e) => handleUserField("address", e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Button variant="contained" type="submit" startIcon={<SaveIcon />} disabled={loadingUser}>
-                      {loadingUser ? "Sauvegarde..." : "Sauvegarder le profil utilisateur"}
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Box>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
               <Typography sx={{ fontWeight: 800, mb: 1.2 }}>
                 {isClient ? "Profil client" : "Profil prestataire"}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
 
-              <Box component="form" onSubmit={submitRoleProfile}>
+              <Box component="form" onSubmit={submitProfileUpdate}>
                 <Grid container spacing={1.4}>
-                  {isClient ? (
-                    <>
-                      <Grid item xs={12} md={6}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Prénom"
+                      value={profileForm.first_name}
+                      onChange={(e) =>
+                        handleProfileField("first_name", e.target.value)
+                      }
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Nom"
+                      value={profileForm.last_name}
+                      onChange={(e) =>
+                        handleProfileField("last_name", e.target.value)
+                      }
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      type="email"
+                      label="Email"
+                      value={profileForm.email}
+                      onChange={(e) => handleProfileField("email", e.target.value)}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Téléphone"
+                      value={profileForm.phone}
+                      onChange={(e) => handleProfileField("phone", e.target.value)}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label={isClient ? "Nom affiché client" : "Nom du prestataire"}
+                      value={profileForm.name}
+                      onChange={(e) => handleProfileField("name", e.target.value)}
+                      placeholder={isClient ? "Ex: Ahmed K." : "Ex: Plomberie Pro DZ"}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Ville"
+                      value={profileForm.city}
+                      onChange={(e) => handleProfileField("city", e.target.value)}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Autocomplete
+                      freeSolo
+                      options={addressOptions}
+                      loading={addressLoading}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.label || ""
+                      }
+                      filterOptions={(x) => x}
+                      onInputChange={(_, value) =>
+                        handleProfileField("address", value)
+                      }
+                      onChange={(_, selected) => {
+                        if (selected && typeof selected !== "string") {
+                          handleSelectAddress(selected);
+                        }
+                      }}
+                      inputValue={profileForm.address}
+                      renderInput={(params) => (
                         <TextField
-                          fullWidth
-                          label="Nom"
-                          value={clientForm.name}
-                          onChange={(e) => handleClientField("name", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          type="email"
-                          label="Email"
-                          value={clientForm.email}
-                          onChange={(e) => handleClientField("email", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Téléphone"
-                          value={clientForm.phone}
-                          onChange={(e) => handleClientField("phone", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Ville"
-                          value={clientForm.city}
-                          onChange={(e) => handleClientField("city", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
+                          {...params}
                           fullWidth
                           label="Adresse"
-                          value={clientForm.address}
-                          onChange={(e) => handleClientField("address", e.target.value)}
+                          placeholder="Tapez une adresse précise..."
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {addressLoading ? (
+                                  <CircularProgress color="inherit" size={18} />
+                                ) : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
                         />
-                      </Grid>
-                    </>
-                  ) : (
+                      )}
+                    />
+                  </Grid>
+
+                  {isEmployer && (
                     <>
                       <Grid item xs={12} md={6}>
                         <TextField
                           fullWidth
-                          label="Nom"
-                          value={employerForm.name}
-                          onChange={(e) => handleEmployerField("name", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          type="email"
-                          label="Email"
-                          value={employerForm.email}
-                          onChange={(e) => handleEmployerField("email", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Téléphone"
-                          value={employerForm.phone}
-                          onChange={(e) => handleEmployerField("phone", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Ville"
-                          value={employerForm.city}
-                          onChange={(e) => handleEmployerField("city", e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Tarif horaire"
+                          label="Tarif horaire (DA)"
                           type="number"
-                          value={employerForm.hourly_rate}
-                          onChange={(e) => handleEmployerField("hourly_rate", e.target.value)}
+                          value={profileForm.hourly_rate}
+                          onChange={(e) =>
+                            handleProfileField("hourly_rate", e.target.value)
+                          }
                         />
                       </Grid>
+
                       <Grid item xs={12} md={6}>
                         <TextField
+                          select
                           fullWidth
-                          label="Adresse"
-                          value={employerForm.address}
-                          onChange={(e) => handleEmployerField("address", e.target.value)}
-                        />
+                          label="Disponibilité / statut"
+                          value={profileForm.is_available ? "available" : "unavailable"}
+                          onChange={(e) =>
+                            handleProfileField(
+                              "is_available",
+                              e.target.value === "available"
+                            )
+                          }
+                        >
+                          <MenuItem value="available">Disponible</MenuItem>
+                          <MenuItem value="unavailable">Indisponible</MenuItem>
+                        </TextField>
                       </Grid>
+
                       <Grid item xs={12}>
                         <TextField
                           fullWidth
                           multiline
                           minRows={3}
                           label="Description"
-                          value={employerForm.description}
-                          onChange={(e) => handleEmployerField("description", e.target.value)}
+                          value={profileForm.description}
+                          onChange={(e) =>
+                            handleProfileField("description", e.target.value)
+                          }
+                          placeholder="Présentez vos services, votre expérience, zones couvertes..."
                         />
                       </Grid>
                     </>
@@ -483,9 +541,11 @@ const Profile = () => {
                       variant="contained"
                       type="submit"
                       startIcon={<SaveIcon />}
-                      disabled={loadingRoleProfile}
+                      disabled={loadingProfile}
                     >
-                      {loadingRoleProfile ? "Sauvegarde..." : "Sauvegarder"}
+                      {loadingProfile
+                        ? "Sauvegarde..."
+                        : `Sauvegarder le profil ${roleLabel}`}
                     </Button>
                   </Grid>
                 </Grid>
@@ -495,8 +555,11 @@ const Profile = () => {
 
           <Grid item xs={12}>
             <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
-              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>Sécurité</Typography>
+              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>
+                Sécurité du compte
+              </Typography>
               <Divider sx={{ mb: 1.5 }} />
+
               <Box component="form" onSubmit={submitPasswordChange}>
                 <Grid container spacing={1.4}>
                   <Grid item xs={12} md={4}>
@@ -505,27 +568,36 @@ const Profile = () => {
                       type="password"
                       label="Mot de passe actuel"
                       value={passwordForm.current_password}
-                      onChange={(e) => handlePasswordField("current_password", e.target.value)}
+                      onChange={(e) =>
+                        handlePasswordField("current_password", e.target.value)
+                      }
                     />
                   </Grid>
+
                   <Grid item xs={12} md={4}>
                     <TextField
                       fullWidth
                       type="password"
                       label="Nouveau mot de passe"
                       value={passwordForm.new_password}
-                      onChange={(e) => handlePasswordField("new_password", e.target.value)}
+                      onChange={(e) =>
+                        handlePasswordField("new_password", e.target.value)
+                      }
                     />
                   </Grid>
+
                   <Grid item xs={12} md={4}>
                     <TextField
                       fullWidth
                       type="password"
-                      label="Confirmer"
+                      label="Confirmer le nouveau mot de passe"
                       value={passwordForm.confirm_password}
-                      onChange={(e) => handlePasswordField("confirm_password", e.target.value)}
+                      onChange={(e) =>
+                        handlePasswordField("confirm_password", e.target.value)
+                      }
                     />
                   </Grid>
+
                   <Grid item xs={12}>
                     <Button
                       variant="outlined"
@@ -533,7 +605,9 @@ const Profile = () => {
                       startIcon={<LockResetIcon />}
                       disabled={loadingPassword}
                     >
-                      {loadingPassword ? "Modification..." : "Changer le mot de passe"}
+                      {loadingPassword
+                        ? "Modification..."
+                        : "Changer le mot de passe"}
                     </Button>
                   </Grid>
                 </Grid>
@@ -543,10 +617,16 @@ const Profile = () => {
 
           <Grid item xs={12}>
             <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#2b1418", 0.45) }}>
-              <Typography sx={{ fontWeight: 800, mb: 0.6 }}>Zone sensible</Typography>
+              <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 0.6 }}>
+                <HomeWorkIcon sx={{ color: "error.main" }} />
+                <Typography sx={{ fontWeight: 800 }}>Suppression du compte</Typography>
+              </Stack>
+
               <Typography color="text.secondary" sx={{ mb: 1.2 }}>
-                Cette action supprime définitivement votre compte.
+                Cette action supprime définitivement votre compte {roleLabel} et toutes
+                vos données associées.
               </Typography>
+
               <Button
                 color="error"
                 variant="outlined"
@@ -564,13 +644,14 @@ const Profile = () => {
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.
+            Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est
+            irréversible.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDeleteConfirm(false)}>Annuler</Button>
           <Button color="error" onClick={confirmDeleteAccount} disabled={loadingDelete}>
-            {loadingDelete ? "Suppression..." : "Supprimer"}
+            {loadingDelete ? "Suppression..." : "Supprimer définitivement"}
           </Button>
         </DialogActions>
       </Dialog>

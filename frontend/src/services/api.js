@@ -275,8 +275,7 @@ export const serviceAPI = {
 };
 
 export const searchAPI = {
-  employers: (params = {}) =>
-    apiRequest(SEARCH_URLS.EMPLOYERS, { method: "GET", params }),
+  employers: (params = {}) => apiRequest(SEARCH_URLS.EMPLOYERS, { method: "GET", params }),
 };
 
 export const employerAPI = {
@@ -309,8 +308,7 @@ export const appointmentAPI = {
   delete: (id) => apiRequest(APPOINTMENT_URLS.DETAIL(id), { method: "DELETE" }),
   cancel: (id, reason = "") =>
     apiRequest(APPOINTMENT_URLS.CANCEL(id), { method: "POST", data: { reason } }),
-  accept: (id) =>
-    apiRequest(APPOINTMENT_URLS.ACCEPT(id), { method: "POST" }),
+  accept: (id) => apiRequest(APPOINTMENT_URLS.ACCEPT(id), { method: "POST" }),
   refuse: (id, reason = "") =>
     apiRequest(APPOINTMENT_URLS.REFUSE(id), { method: "POST", data: { reason } }),
   review: (id, data) => apiRequest(APPOINTMENT_URLS.REVIEW(id), { method: "POST", data }),
@@ -318,6 +316,32 @@ export const appointmentAPI = {
   pay: (id, data) => apiRequest(APPOINTMENT_URLS.PAYMENT(id), { method: "POST", data }),
   processPayment: (appointmentId, data = {}) =>
     apiRequest(PAYMENT_URLS.PROCESS(appointmentId), { method: "POST", data }),
+};
+
+/**
+ * Stripe readiness check (frontend only).
+ * - true => token public Stripe présent côté frontend
+ * - false => fallback placeholder
+ */
+export const isStripeConfigured = () => {
+  const pk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+  return Boolean(pk && String(pk).trim().length > 0);
+};
+
+/**
+ * Tente le flux paiement carte existant.
+ * Si backend Stripe n'est pas prêt ou renvoie 404/501 => retourne null pour fallback UI propre.
+ */
+export const tryStripePaymentOrNull = async (appointmentId, data = {}) => {
+  try {
+    const response = await appointmentAPI.processPayment(appointmentId, data);
+    return response || null;
+  } catch (err) {
+    if ([404, 405, 500, 501].includes(err?.status)) {
+      return null;
+    }
+    throw err;
+  }
 };
 
 export const reviewAPI = {
@@ -411,18 +435,75 @@ export const APPOINTMENTS_URL = APPOINTMENT_URLS;
 
 export const getServices = async () => apiRequest(SERVICE_URLS.LIST);
 
-export const searchPlacesMapbox = async (query) => {
+/* =========================================================
+ * MAPBOX HELPERS
+ * =======================================================*/
+
+const MAPBOX_GEOCODE_ENDPOINT = "https://api.mapbox.com/geocoding/v5/mapbox.places";
+
+const pickContextText = (feature, prefix) => {
+  const entry = feature?.context?.find((c) => c.id?.startsWith(prefix));
+  return entry?.text || "";
+};
+
+const normalizePlaceFeature = (feature) => {
+  const center = Array.isArray(feature?.center) ? feature.center : [];
+  const lng = typeof center[0] === "number" ? center[0] : null;
+  const lat = typeof center[1] === "number" ? center[1] : null;
+
+  const city =
+    pickContextText(feature, "place.") ||
+    feature?.text ||
+    pickContextText(feature, "district.") ||
+    "";
+
+  const country = pickContextText(feature, "country.");
+  const postcode = pickContextText(feature, "postcode.");
+
+  return {
+    id: feature?.id || `place_${Math.random().toString(36).slice(2)}`,
+    label: feature?.place_name || feature?.text || "",
+    address: feature?.place_name || "",
+    city,
+    country,
+    postcode,
+    latitude: lat,
+    longitude: lng,
+    raw: feature,
+  };
+};
+
+export const isMapboxConfigured = () => {
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
-  if (!token || !query) return [];
+  return Boolean(token && String(token).trim().length > 0);
+};
 
-  const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`;
-  const resp = await fetch(
-    `${endpoint}?access_token=${token}&autocomplete=true&language=fr&limit=5`
-  );
+export const searchPlacesMapbox = async (query, opts = {}) => {
+  const token = import.meta.env.VITE_MAPBOX_TOKEN;
+  const q = String(query || "").trim();
+  if (!token || !q) return [];
 
+  const limit = Number(opts.limit || 6);
+  const language = opts.language || "fr";
+  const country = opts.country || "";
+
+  const endpoint = `${MAPBOX_GEOCODE_ENDPOINT}/${encodeURIComponent(q)}.json`;
+  const params = new URLSearchParams({
+    access_token: token,
+    autocomplete: "true",
+    language,
+    limit: String(limit),
+    types: "address,place,locality,postcode",
+  });
+
+  if (country) params.set("country", country);
+
+  const resp = await fetch(`${endpoint}?${params.toString()}`);
   if (!resp.ok) return [];
+
   const data = await resp.json();
-  return Array.isArray(data?.features) ? data.features : [];
+  const features = Array.isArray(data?.features) ? data.features : [];
+  return features.map(normalizePlaceFeature).filter((p) => p.label);
 };
 
 export default api;

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -22,6 +23,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  Tooltip,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -33,32 +35,41 @@ import {
   Star as StarIcon,
   Payment as PaymentIcon,
   Close as RefuseIcon,
+  InfoOutlined as InfoIcon,
+  CheckCircleOutline as MarkPaidIcon,
 } from "@mui/icons-material";
 
-import { appointmentAPI, employerAPI, getServices } from "../services/api";
+import {
+  appointmentAPI,
+  employerAPI,
+  getServices,
+  isMapboxConfigured,
+  isStripeConfigured,
+  searchPlacesMapbox,
+} from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 const statusLabelMap = {
   en_attente: "En attente",
-  "accepté": "Accepté",
-  "refusé": "Refusé",
+  accepté: "Accepté",
+  refusé: "Refusé",
   en_cours: "En cours",
-  "terminé": "Terminé",
-  "annulé": "Annulé",
+  terminé: "Terminé",
+  annulé: "Annulé",
 };
 
 const statusColorMap = {
   en_attente: "warning",
-  "accepté": "success",
-  "refusé": "error",
+  accepté: "success",
+  refusé: "error",
   en_cours: "info",
-  "terminé": "success",
-  "annulé": "default",
+  terminé: "success",
+  annulé: "default",
 };
 
 const paymentLabelMap = {
-  carte: "Carte",
-  especes: "Espèces",
+  carte: "Carte bancaire",
+  especes: "Espèces sur place",
 };
 
 const toInputDateTimeLocal = (d = new Date()) => {
@@ -79,6 +90,11 @@ const formatDate = (value) => {
 };
 
 const normalizeList = (data) => (Array.isArray(data) ? data : data?.results ?? []);
+
+const APPOINTMENT_CANCELLABLE_BY_CLIENT = ["en_attente"];
+const APPOINTMENT_CANCELLABLE_BY_EMPLOYER = ["en_attente", "accepté", "en_cours"];
+const APPOINTMENT_PAYABLE_CASH_STATUSES = ["accepté", "terminé"];
+const APPOINTMENT_REVIEWABLE_STATUSES = ["accepté", "terminé"];
 
 const Appointments = () => {
   const navigate = useNavigate();
@@ -119,6 +135,14 @@ const Appointments = () => {
     payment_method: "especes",
   });
 
+  // Mapbox autocomplete
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const mapboxEnabled = isMapboxConfigured();
+
+  // Stripe readiness (frontend flag only; no backend call here)
+  const stripeEnabled = isStripeConfigured();
+
   const activeEmployers = useMemo(
     () =>
       employers.filter((e) => {
@@ -143,8 +167,9 @@ const Appointments = () => {
     const total = appointments.length;
     const pending = appointments.filter((a) => a.status === "en_attente").length;
     const confirmed = appointments.filter((a) => a.status === "accepté").length;
+    const finished = appointments.filter((a) => a.status === "terminé").length;
     const canceled = appointments.filter((a) => a.status === "annulé").length;
-    return { total, pending, confirmed, canceled };
+    return { total, pending, confirmed, finished, canceled };
   }, [appointments]);
 
   const resetMessages = () => {
@@ -187,8 +212,46 @@ const Appointments = () => {
     }
   }, [initialEmployerId, initialServiceId, isClient]);
 
+  useEffect(() => {
+    if (!mapboxEnabled) {
+      setLocationOptions([]);
+      return;
+    }
+
+    const q = (createForm.location || "").trim();
+    if (q.length < 3) {
+      setLocationOptions([]);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        setLocationLoading(true);
+        const places = await searchPlacesMapbox(q, { limit: 6, language: "fr" });
+        if (!active) return;
+        setLocationOptions(places);
+      } catch {
+        if (!active) return;
+        setLocationOptions([]);
+      } finally {
+        if (active) setLocationLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [createForm.location, mapboxEnabled]);
+
   const handleCreateField = (key, value) => {
     setCreateForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSelectAppointmentLocation = (option) => {
+    if (!option) return;
+    handleCreateField("location", option.address || option.label || "");
   };
 
   const handleCreateAppointment = async (e) => {
@@ -216,7 +279,11 @@ const Appointments = () => {
         payment_method: createForm.payment_method,
       });
 
-      setSuccessMsg("Rendez-vous créé avec succès.");
+      setSuccessMsg(
+        createForm.payment_method === "especes"
+          ? "Rendez-vous créé. Paiement en espèces à effectuer sur place après service."
+          : "Rendez-vous créé. Paiement carte bientôt disponible (Stripe non configuré)."
+      );
       setOpenCreate(false);
       await fetchAll();
     } catch (err) {
@@ -268,18 +335,39 @@ const Appointments = () => {
     }
   };
 
-  const handlePay = async (appointmentId, payment_method = "carte") => {
+  // IMPORTANT:
+  // - Pas de validation paiement espèces côté client.
+  // - Cette action est réservée au prestataire (confirmation "espèces reçues").
+  const handleMarkCashReceivedByEmployer = async (appointmentId) => {
     resetMessages();
     setLoadingPayId(appointmentId);
     try {
-      await appointmentAPI.pay(appointmentId, { payment_method });
-      setSuccessMsg("Paiement enregistré.");
+      await appointmentAPI.pay(appointmentId, { payment_method: "especes" });
+      setSuccessMsg("Paiement en espèces marqué comme reçu.");
       await fetchAll();
     } catch (err) {
-      setError(err?.message || "Paiement impossible.");
+      setError(err?.message || "Impossible de marquer ce paiement.");
     } finally {
       setLoadingPayId(null);
     }
+  };
+
+  // IMPORTANT:
+  // - Aucun appel backend de paiement carte tant que Stripe n'est pas prêt.
+  // - Aucun is_paid=true simulé.
+  const handleCardPaymentPlaceholder = (appointment) => {
+    resetMessages();
+
+    if (!stripeEnabled) {
+      setError("Paiement carte bientôt disponible / Stripe non configuré.");
+      return;
+    }
+
+    // Même si clé frontend présente, on ne simule pas de paiement sans flux Stripe réel confirmé.
+    setError(
+      `Paiement carte en préparation pour le rendez-vous #${appointment.id}. ` +
+        "Le flux Stripe réel (checkout + confirmation) n'est pas encore activé."
+    );
   };
 
   const openReviewDialog = (appointment) => {
@@ -310,15 +398,36 @@ const Appointments = () => {
     }
   };
 
-  const canClientCancel = (appointment) => isClient && appointment.status === "en_attente";
-  const canEmployerCancel = (appointment) => isEmployer && ["accepté", "en_cours"].includes(appointment.status);
-  const canEmployerAccept = (appointment) => isEmployer && appointment.status === "en_attente";
-  const canEmployerRefuse = (appointment) => isEmployer && appointment.status === "en_attente";
+  const canClientCancel = (appointment) =>
+    isClient && APPOINTMENT_CANCELLABLE_BY_CLIENT.includes(appointment.status);
+
+  const canEmployerCancel = (appointment) =>
+    isEmployer && APPOINTMENT_CANCELLABLE_BY_EMPLOYER.includes(appointment.status);
+
+  const canEmployerAccept = (appointment) =>
+    isEmployer && appointment.status === "en_attente";
+
+  const canEmployerRefuse = (appointment) =>
+    isEmployer && appointment.status === "en_attente";
 
   const canReview = (appointment) =>
     isClient &&
-    ["accepté", "terminé"].includes(appointment.status) &&
+    APPOINTMENT_REVIEWABLE_STATUSES.includes(appointment.status) &&
     appointment.status !== "annulé";
+
+  // Client: peut cliquer placeholder carte, mais aucun appel de paiement réel
+  const canShowCardButton = (appointment) =>
+    isClient &&
+    !appointment.is_paid &&
+    appointment.payment_method === "carte" &&
+    appointment.status !== "annulé";
+
+  // Prestataire: peut confirmer espèces reçues seulement dans statuts cohérents
+  const canEmployerMarkCashReceived = (appointment) =>
+    isEmployer &&
+    !appointment.is_paid &&
+    appointment.payment_method === "especes" &&
+    APPOINTMENT_PAYABLE_CASH_STATUSES.includes(appointment.status);
 
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
@@ -350,7 +459,11 @@ const Appointments = () => {
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {isClient && (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreate(true)}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenCreate(true)}
+              >
                 Nouveau rendez-vous
               </Button>
             )}
@@ -365,20 +478,48 @@ const Appointments = () => {
             ["Total", stats.total],
             ["En attente", stats.pending],
             ["Acceptés", stats.confirmed],
+            ["Terminés", stats.finished],
             ["Annulés", stats.canceled],
           ].map(([label, value]) => (
-            <Grid item xs={12} sm={6} md={3} key={label}>
+            <Grid item xs={12} sm={6} md={2.4} key={label}>
               <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
-                <Typography variant="caption" color="text.secondary">{label}</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>{value}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {label}
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                  {value}
+                </Typography>
               </Paper>
             </Grid>
           ))}
         </Grid>
+
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>
+          <InfoIcon fontSize="small" sx={{ color: "text.secondary" }} />
+          <Typography variant="caption" color="text.secondary">
+            Espèces : paiement sur place après service (confirmé par prestataire). Carte :
+            bientôt disponible via Stripe.
+          </Typography>
+        </Stack>
       </Paper>
 
-      {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {!mapboxEnabled && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Suggestions d’adresse désactivées dans la création de rendez-vous. Ajoutez{" "}
+          <strong>VITE_MAPBOX_TOKEN</strong> dans <strong>frontend/.env</strong>.
+        </Alert>
+      )}
+
+      {successMsg && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {successMsg}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       {loading ? (
         <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
@@ -402,7 +543,7 @@ const Appointments = () => {
       ) : (
         <Paper sx={{ p: 2, borderRadius: 3.5 }}>
           <Box sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 1000 }}>
+            <Table sx={{ minWidth: 1080 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Date</TableCell>
@@ -438,14 +579,16 @@ const Appointments = () => {
                       <TableCell>
                         <Stack spacing={0.4}>
                           <Typography variant="body2">
-                            {paymentLabelMap[appointment.payment_method] || appointment.payment_method || "—"}
+                            {paymentLabelMap[appointment.payment_method] ||
+                              appointment.payment_method ||
+                              "—"}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {appointment.is_paid ? "Payé" : "Non payé"}
                           </Typography>
                         </Stack>
                       </TableCell>
-                      <TableCell sx={{ maxWidth: 220 }}>
+                      <TableCell sx={{ maxWidth: 260 }}>
                         <Typography
                           variant="body2"
                           sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
@@ -457,15 +600,34 @@ const Appointments = () => {
 
                       <TableCell align="right">
                         <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
-                          {isClient && !appointment.is_paid && appointment.status !== "annulé" && (
+                          {canShowCardButton(appointment) && (
+                            <Tooltip title="Paiement carte bientôt disponible (Stripe)">
+                              <span>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<PaymentIcon />}
+                                  onClick={() => handleCardPaymentPlaceholder(appointment)}
+                                  disabled={loadingPayId === appointment.id}
+                                >
+                                  Payer par carte
+                                </Button>
+                              </span>
+                            </Tooltip>
+                          )}
+
+                          {canEmployerMarkCashReceived(appointment) && (
                             <Button
                               size="small"
                               variant="outlined"
-                              startIcon={<PaymentIcon />}
-                              onClick={() => handlePay(appointment.id, "carte")}
+                              color="success"
+                              startIcon={<MarkPaidIcon />}
+                              onClick={() => handleMarkCashReceivedByEmployer(appointment.id)}
                               disabled={loadingPayId === appointment.id}
                             >
-                              {loadingPayId === appointment.id ? "..." : "Payer"}
+                              {loadingPayId === appointment.id
+                                ? "..."
+                                : "Espèces reçues"}
                             </Button>
                           )}
 
@@ -588,18 +750,46 @@ const Appointments = () => {
                     value={createForm.payment_method}
                     onChange={(e) => handleCreateField("payment_method", e.target.value)}
                   >
-                    <MenuItem value="especes">Espèces</MenuItem>
-                    <MenuItem value="carte">Carte</MenuItem>
+                    <MenuItem value="especes">Espèces sur place</MenuItem>
+                    <MenuItem value="carte">Carte bancaire (Stripe bientôt)</MenuItem>
                   </TextField>
                 </Grid>
 
                 <Grid item xs={12}>
-                  <TextField
-                    label="Localisation"
-                    fullWidth
-                    value={createForm.location}
-                    onChange={(e) => handleCreateField("location", e.target.value)}
-                    placeholder="Adresse du rendez-vous"
+                  <Autocomplete
+                    freeSolo
+                    options={locationOptions}
+                    loading={locationLoading}
+                    filterOptions={(x) => x}
+                    getOptionLabel={(option) =>
+                      typeof option === "string" ? option : option.label || ""
+                    }
+                    inputValue={createForm.location}
+                    onInputChange={(_, value) => handleCreateField("location", value)}
+                    onChange={(_, selected) => {
+                      if (selected && typeof selected !== "string") {
+                        handleSelectAppointmentLocation(selected);
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Localisation"
+                        fullWidth
+                        placeholder="Adresse exacte du rendez-vous"
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {locationLoading ? (
+                                <CircularProgress color="inherit" size={18} />
+                              ) : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
                   />
                 </Grid>
 
@@ -611,7 +801,16 @@ const Appointments = () => {
                     minRows={3}
                     value={createForm.description}
                     onChange={(e) => handleCreateField("description", e.target.value)}
+                    placeholder="Détails utiles pour le prestataire..."
                   />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Alert severity="info" variant="outlined">
+                    {createForm.payment_method === "especes"
+                      ? "Paiement en espèces : vous ne payez pas maintenant. Le paiement se fait sur place après réalisation du service."
+                      : "Paiement carte : Stripe sera activé prochainement. Aucun débit n’est effectué pour l’instant."}
+                  </Alert>
                 </Grid>
               </Grid>
             </Box>
@@ -620,7 +819,12 @@ const Appointments = () => {
         <DialogActions>
           <Button onClick={() => setOpenCreate(false)}>Fermer</Button>
           {isClient && (
-            <Button type="submit" form="create-appointment-form" variant="contained" disabled={loadingCreate}>
+            <Button
+              type="submit"
+              form="create-appointment-form"
+              variant="contained"
+              disabled={loadingCreate}
+            >
               {loadingCreate ? "Création..." : "Créer"}
             </Button>
           )}
