@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
-import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
+import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
@@ -23,119 +23,7 @@ import ServiceDetails from "./pages/ServiceDetails";
 import ProviderDetail from "./pages/ProviderDetail";
 
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-
-const brand = {
-  orange: "#f38b2a",
-  orangeSoft: "#ffae57",
-  charcoal: "#111318",
-  charcoalSoft: "#171b22",
-  slate: "#232935",
-  border: "#2e3544",
-  text: "#f2f4f8",
-  muted: "#a9b1bf",
-};
-
-const theme = createTheme({
-  palette: {
-    mode: "dark",
-    primary: {
-      main: brand.orange,
-      dark: "#db7820",
-      light: brand.orangeSoft,
-      contrastText: "#121418",
-    },
-    secondary: { main: brand.slate },
-    background: {
-      default: brand.charcoal,
-      paper: brand.charcoalSoft,
-    },
-    text: {
-      primary: brand.text,
-      secondary: brand.muted,
-    },
-    divider: brand.border,
-    success: { main: "#46bc74" },
-    info: { main: "#56a9ff" },
-    warning: { main: "#ffbf69" },
-    error: { main: "#ff6f78" },
-  },
-  shape: {
-    borderRadius: 14,
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: { fontWeight: 800, letterSpacing: "-0.03em" },
-    h2: { fontWeight: 800, letterSpacing: "-0.03em" },
-    h3: { fontWeight: 780, letterSpacing: "-0.02em" },
-    h4: { fontWeight: 760, letterSpacing: "-0.02em" },
-    h5: { fontWeight: 720 },
-    h6: { fontWeight: 700 },
-    button: { textTransform: "none", fontWeight: 700 },
-  },
-  components: {
-    MuiCssBaseline: {
-      styleOverrides: {
-        body: {
-          backgroundColor: brand.charcoal,
-          backgroundImage:
-            "radial-gradient(circle at 8% -10%, rgba(243,139,42,0.2), transparent 32%), radial-gradient(circle at 90% 15%, rgba(86,169,255,0.09), transparent 26%), linear-gradient(180deg, #12161d 0%, #111318 100%)",
-        },
-        a: {
-          color: "inherit",
-          textDecoration: "none",
-        },
-        "*::-webkit-scrollbar": { width: "10px", height: "10px" },
-        "*::-webkit-scrollbar-thumb": {
-          backgroundColor: brand.border,
-          borderRadius: "999px",
-        },
-        "*::-webkit-scrollbar-track": { backgroundColor: brand.charcoal },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          backgroundImage: "none",
-          border: `1px solid ${brand.border}`,
-          boxShadow: "0 12px 34px rgba(0,0,0,.3)",
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          border: `1px solid ${brand.border}`,
-          boxShadow: "0 12px 30px rgba(0,0,0,.26)",
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          paddingInline: 16,
-          paddingBlock: 9,
-        },
-        containedPrimary: {
-          background: `linear-gradient(135deg, ${brand.orange} 0%, ${brand.orangeSoft} 100%)`,
-          color: "#111318",
-          boxShadow: "0 10px 28px rgba(243,139,42,.35)",
-          "&:hover": {
-            background: "linear-gradient(135deg, #f79d49 0%, #ffbf79 100%)",
-            boxShadow: "0 12px 30px rgba(243,139,42,.42)",
-          },
-        },
-        outlined: {
-          borderColor: brand.border,
-          "&:hover": {
-            borderColor: brand.orange,
-            backgroundColor: alpha(brand.orange, 0.08),
-          },
-        },
-      },
-    },
-  },
-});
+import theme from "./theme/nazekTheme";
 
 const FullPageLoader = () => (
   <Container

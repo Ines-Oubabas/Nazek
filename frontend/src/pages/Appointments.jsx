@@ -24,6 +24,8 @@ import {
   TextField,
   Typography,
   Tooltip,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -37,6 +39,7 @@ import {
   Close as RefuseIcon,
   InfoOutlined as InfoIcon,
   CheckCircleOutline as MarkPaidIcon,
+  Inventory2Outlined as ArchiveIcon,
 } from "@mui/icons-material";
 
 import {
@@ -52,18 +55,24 @@ import { useAuth } from "../contexts/AuthContext";
 const statusLabelMap = {
   en_attente: "En attente",
   accepté: "Accepté",
+  refuse: "Refusé",
   refusé: "Refusé",
   en_cours: "En cours",
+  termine: "Terminé",
   terminé: "Terminé",
+  annule: "Annulé",
   annulé: "Annulé",
 };
 
 const statusColorMap = {
   en_attente: "warning",
   accepté: "success",
+  refuse: "error",
   refusé: "error",
   en_cours: "info",
+  termine: "success",
   terminé: "success",
+  annule: "default",
   annulé: "default",
 };
 
@@ -71,6 +80,8 @@ const paymentLabelMap = {
   carte: "Carte bancaire",
   especes: "Espèces sur place",
 };
+
+const ARCHIVED_APPOINTMENTS_STORAGE_KEY = "nazek.archivedAppointmentIds.v1";
 
 const toInputDateTimeLocal = (d = new Date()) => {
   const pad = (v) => String(v).padStart(2, "0");
@@ -93,8 +104,9 @@ const normalizeList = (data) => (Array.isArray(data) ? data : data?.results ?? [
 
 const APPOINTMENT_CANCELLABLE_BY_CLIENT = ["en_attente"];
 const APPOINTMENT_CANCELLABLE_BY_EMPLOYER = ["en_attente", "accepté", "en_cours"];
-const APPOINTMENT_PAYABLE_CASH_STATUSES = ["accepté", "terminé"];
-const APPOINTMENT_REVIEWABLE_STATUSES = ["accepté", "terminé"];
+const APPOINTMENT_PAYABLE_CASH_STATUSES = ["accepté", "terminé", "termine"];
+const APPOINTMENT_REVIEWABLE_STATUSES = ["accepté", "terminé", "termine"];
+const ARCHIVABLE_STATUSES = ["annulé", "annule", "refusé", "refuse", "terminé", "termine"];
 
 const Appointments = () => {
   const navigate = useNavigate();
@@ -135,13 +147,35 @@ const Appointments = () => {
     payment_method: "especes",
   });
 
+  // archive UI (frontend uniquement, sans suppression DB)
+  const [archivedIds, setArchivedIds] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
+
   // Mapbox autocomplete
   const [locationOptions, setLocationOptions] = useState([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const mapboxEnabled = isMapboxConfigured();
 
-  // Stripe readiness (frontend flag only; no backend call here)
+  // Stripe readiness (frontend flag only)
   const stripeEnabled = isStripeConfigured();
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ARCHIVED_APPOINTMENTS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setArchivedIds(parsed.filter((id) => Number.isFinite(Number(id))).map(Number));
+      }
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const persistArchived = (ids) => {
+    setArchivedIds(ids);
+    localStorage.setItem(ARCHIVED_APPOINTMENTS_STORAGE_KEY, JSON.stringify(ids));
+  };
 
   const activeEmployers = useMemo(
     () =>
@@ -163,14 +197,25 @@ const Appointments = () => {
     [appointments]
   );
 
+  const visibleAppointments = useMemo(() => {
+    if (showArchived) return sortedAppointments;
+    return sortedAppointments.filter((a) => !archivedIds.includes(Number(a.id)));
+  }, [sortedAppointments, archivedIds, showArchived]);
+
+  const archivedCount = useMemo(
+    () => sortedAppointments.filter((a) => archivedIds.includes(Number(a.id))).length,
+    [sortedAppointments, archivedIds]
+  );
+
   const stats = useMemo(() => {
-    const total = appointments.length;
-    const pending = appointments.filter((a) => a.status === "en_attente").length;
-    const confirmed = appointments.filter((a) => a.status === "accepté").length;
-    const finished = appointments.filter((a) => a.status === "terminé").length;
-    const canceled = appointments.filter((a) => a.status === "annulé").length;
+    const src = visibleAppointments;
+    const total = src.length;
+    const pending = src.filter((a) => a.status === "en_attente").length;
+    const confirmed = src.filter((a) => a.status === "accepté").length;
+    const finished = src.filter((a) => ["terminé", "termine"].includes(a.status)).length;
+    const canceled = src.filter((a) => ["annulé", "annule"].includes(a.status)).length;
     return { total, pending, confirmed, finished, canceled };
-  }, [appointments]);
+  }, [visibleAppointments]);
 
   const resetMessages = () => {
     setError("");
@@ -284,6 +329,7 @@ const Appointments = () => {
           ? "Rendez-vous créé. Paiement en espèces à effectuer sur place après service."
           : "Rendez-vous créé. Paiement carte bientôt disponible (Stripe non configuré)."
       );
+
       setOpenCreate(false);
       await fetchAll();
     } catch (err) {
@@ -335,9 +381,6 @@ const Appointments = () => {
     }
   };
 
-  // IMPORTANT:
-  // - Pas de validation paiement espèces côté client.
-  // - Cette action est réservée au prestataire (confirmation "espèces reçues").
   const handleMarkCashReceivedByEmployer = async (appointmentId) => {
     resetMessages();
     setLoadingPayId(appointmentId);
@@ -352,21 +395,14 @@ const Appointments = () => {
     }
   };
 
-  // IMPORTANT:
-  // - Aucun appel backend de paiement carte tant que Stripe n'est pas prêt.
-  // - Aucun is_paid=true simulé.
   const handleCardPaymentPlaceholder = (appointment) => {
     resetMessages();
-
     if (!stripeEnabled) {
-      setError("Paiement carte bientôt disponible / Stripe non configuré.");
+      setError("Stripe non configuré : paiement carte indisponible pour le moment.");
       return;
     }
-
-    // Même si clé frontend présente, on ne simule pas de paiement sans flux Stripe réel confirmé.
     setError(
-      `Paiement carte en préparation pour le rendez-vous #${appointment.id}. ` +
-        "Le flux Stripe réel (checkout + confirmation) n'est pas encore activé."
+      `Paiement carte en préparation pour le rendez-vous #${appointment.id}. Le flux Stripe réel n'est pas encore activé.`
     );
   };
 
@@ -404,30 +440,38 @@ const Appointments = () => {
   const canEmployerCancel = (appointment) =>
     isEmployer && APPOINTMENT_CANCELLABLE_BY_EMPLOYER.includes(appointment.status);
 
-  const canEmployerAccept = (appointment) =>
-    isEmployer && appointment.status === "en_attente";
+  const canEmployerAccept = (appointment) => isEmployer && appointment.status === "en_attente";
 
-  const canEmployerRefuse = (appointment) =>
-    isEmployer && appointment.status === "en_attente";
+  const canEmployerRefuse = (appointment) => isEmployer && appointment.status === "en_attente";
 
   const canReview = (appointment) =>
     isClient &&
     APPOINTMENT_REVIEWABLE_STATUSES.includes(appointment.status) &&
-    appointment.status !== "annulé";
+    !["annulé", "annule"].includes(appointment.status);
 
-  // Client: peut cliquer placeholder carte, mais aucun appel de paiement réel
   const canShowCardButton = (appointment) =>
     isClient &&
     !appointment.is_paid &&
     appointment.payment_method === "carte" &&
-    appointment.status !== "annulé";
+    !["annulé", "annule"].includes(appointment.status);
 
-  // Prestataire: peut confirmer espèces reçues seulement dans statuts cohérents
   const canEmployerMarkCashReceived = (appointment) =>
     isEmployer &&
     !appointment.is_paid &&
     appointment.payment_method === "especes" &&
     APPOINTMENT_PAYABLE_CASH_STATUSES.includes(appointment.status);
+
+  const isArchivable = (appointment) => ARCHIVABLE_STATUSES.includes(appointment.status);
+  const isArchived = (appointment) => archivedIds.includes(Number(appointment.id));
+
+  const handleArchiveToggle = (appointment) => {
+    const id = Number(appointment.id);
+    if (isArchived(appointment)) {
+      persistArchived(archivedIds.filter((x) => x !== id));
+      return;
+    }
+    persistArchived([...archivedIds, id]);
+  };
 
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
@@ -437,7 +481,7 @@ const Appointments = () => {
           mb: 2.2,
           borderRadius: 4,
           background:
-            "radial-gradient(circle at 10% -30%, rgba(86,169,255,.14), transparent 38%), #171b22",
+            "radial-gradient(circle at 10% -30%, rgba(93,168,255,.14), transparent 38%), #171d28",
         }}
       >
         <Stack
@@ -448,22 +492,18 @@ const Appointments = () => {
         >
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 800 }}>
-              Mes rendez-vous
+              {isEmployer ? "Rendez-vous reçus" : "Mes rendez-vous"}
             </Typography>
             <Typography color="text.secondary">
               {isClient
                 ? "Créez, suivez, annulez et notez vos rendez-vous."
-                : "Consultez et gérez les rendez-vous reçus."}
+                : "Consultez, acceptez/refusez et confirmez les paiements espèces."}
             </Typography>
           </Box>
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {isClient && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenCreate(true)}
-              >
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreate(true)}>
                 Nouveau rendez-vous
               </Button>
             )}
@@ -475,14 +515,15 @@ const Appointments = () => {
 
         <Grid container spacing={1.2} sx={{ mt: 1 }}>
           {[
-            ["Total", stats.total],
+            ["Total visibles", stats.total],
             ["En attente", stats.pending],
             ["Acceptés", stats.confirmed],
             ["Terminés", stats.finished],
             ["Annulés", stats.canceled],
+            ["Archivés (UI)", archivedCount],
           ].map(([label, value]) => (
-            <Grid item xs={12} sm={6} md={2.4} key={label}>
-              <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#232935", 0.6) }}>
+            <Grid item xs={12} sm={6} md={2} key={label}>
+              <Paper sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha("#27344A", 0.55) }}>
                 <Typography variant="caption" color="text.secondary">
                   {label}
                 </Typography>
@@ -494,13 +535,18 @@ const Appointments = () => {
           ))}
         </Grid>
 
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5, flexWrap: "wrap" }}>
           <InfoIcon fontSize="small" sx={{ color: "text.secondary" }} />
           <Typography variant="caption" color="text.secondary">
-            Espèces : paiement sur place après service (confirmé par prestataire). Carte :
-            bientôt disponible via Stripe.
+            Espèces : paiement sur place après service (confirmé par prestataire). Carte : Stripe non configuré tant que le backend n’expose pas le flux réel.
           </Typography>
         </Stack>
+
+        <FormControlLabel
+          sx={{ mt: 1 }}
+          control={<Switch checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
+          label="Afficher aussi les rendez-vous archivés (masqués côté interface uniquement)"
+        />
       </Paper>
 
       {!mapboxEnabled && (
@@ -526,12 +572,12 @@ const Appointments = () => {
           <CircularProgress />
           <Typography sx={{ mt: 1.2 }}>Chargement des rendez-vous...</Typography>
         </Paper>
-      ) : sortedAppointments.length === 0 ? (
+      ) : visibleAppointments.length === 0 ? (
         <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
-          <Typography variant="h6">Aucun rendez-vous pour le moment</Typography>
+          <Typography variant="h6">Aucun rendez-vous visible</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.6, mb: 1.8 }}>
             {isClient
-              ? "Commencez par réserver un service avec un prestataire."
+              ? "Créez votre premier rendez-vous ou affichez les éléments archivés."
               : "Les rendez-vous s’afficheront ici dès qu’ils seront créés."}
           </Typography>
           {isClient && (
@@ -543,7 +589,7 @@ const Appointments = () => {
       ) : (
         <Paper sx={{ p: 2, borderRadius: 3.5 }}>
           <Box sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 1080 }}>
+            <Table sx={{ minWidth: 1120 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Date</TableCell>
@@ -558,7 +604,7 @@ const Appointments = () => {
               </TableHead>
 
               <TableBody>
-                {sortedAppointments.map((appointment) => {
+                {visibleAppointments.map((appointment) => {
                   const statusKey = appointment.status || "en_attente";
                   const statusLabel = statusLabelMap[statusKey] || statusKey;
                   const statusColor = statusColorMap[statusKey] || "default";
@@ -568,9 +614,7 @@ const Appointments = () => {
                       <TableCell>{formatDate(appointment.date)}</TableCell>
                       <TableCell>{appointment?.service?.name || "—"}</TableCell>
                       <TableCell>
-                        {isEmployer
-                          ? appointment?.client?.name || "—"
-                          : appointment?.employer?.name || "—"}
+                        {isEmployer ? appointment?.client?.name || "—" : appointment?.employer?.name || "—"}
                       </TableCell>
                       <TableCell>{appointment?.location || "—"}</TableCell>
                       <TableCell>
@@ -625,9 +669,7 @@ const Appointments = () => {
                               onClick={() => handleMarkCashReceivedByEmployer(appointment.id)}
                               disabled={loadingPayId === appointment.id}
                             >
-                              {loadingPayId === appointment.id
-                                ? "..."
-                                : "Espèces reçues"}
+                              {loadingPayId === appointment.id ? "..." : "Espèces reçues"}
                             </Button>
                           )}
 
@@ -678,6 +720,17 @@ const Appointments = () => {
                               onClick={() => openReviewDialog(appointment)}
                             >
                               Noter
+                            </Button>
+                          )}
+
+                          {isArchivable(appointment) && (
+                            <Button
+                              size="small"
+                              variant={isArchived(appointment) ? "contained" : "outlined"}
+                              startIcon={<ArchiveIcon />}
+                              onClick={() => handleArchiveToggle(appointment)}
+                            >
+                              {isArchived(appointment) ? "Désarchiver" : "Archiver"}
                             </Button>
                           )}
                         </Stack>
@@ -761,9 +814,7 @@ const Appointments = () => {
                     options={locationOptions}
                     loading={locationLoading}
                     filterOptions={(x) => x}
-                    getOptionLabel={(option) =>
-                      typeof option === "string" ? option : option.label || ""
-                    }
+                    getOptionLabel={(option) => (typeof option === "string" ? option : option.label || "")}
                     inputValue={createForm.location}
                     onInputChange={(_, value) => handleCreateField("location", value)}
                     onChange={(_, selected) => {
@@ -781,9 +832,7 @@ const Appointments = () => {
                           ...params.InputProps,
                           endAdornment: (
                             <>
-                              {locationLoading ? (
-                                <CircularProgress color="inherit" size={18} />
-                              ) : null}
+                              {locationLoading ? <CircularProgress color="inherit" size={18} /> : null}
                               {params.InputProps.endAdornment}
                             </>
                           ),
@@ -808,8 +857,8 @@ const Appointments = () => {
                 <Grid item xs={12}>
                   <Alert severity="info" variant="outlined">
                     {createForm.payment_method === "especes"
-                      ? "Paiement en espèces : vous ne payez pas maintenant. Le paiement se fait sur place après réalisation du service."
-                      : "Paiement carte : Stripe sera activé prochainement. Aucun débit n’est effectué pour l’instant."}
+                      ? "Paiement en espèces : règlement sur place après réalisation du service."
+                      : "Paiement carte : Stripe non configuré pour l’instant (aucun débit effectué)."}
                   </Alert>
                 </Grid>
               </Grid>
@@ -819,12 +868,7 @@ const Appointments = () => {
         <DialogActions>
           <Button onClick={() => setOpenCreate(false)}>Fermer</Button>
           {isClient && (
-            <Button
-              type="submit"
-              form="create-appointment-form"
-              variant="contained"
-              disabled={loadingCreate}
-            >
+            <Button type="submit" form="create-appointment-form" variant="contained" disabled={loadingCreate}>
               {loadingCreate ? "Création..." : "Créer"}
             </Button>
           )}

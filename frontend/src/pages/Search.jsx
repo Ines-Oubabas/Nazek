@@ -21,6 +21,7 @@ import {
   TextField,
   Typography,
   Tooltip,
+  Avatar,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -34,6 +35,8 @@ import {
   Favorite as FavoriteIcon,
   ChatBubbleOutline as MessageIcon,
   InfoOutlined as InfoIcon,
+  FilterList as FilterListIcon,
+  Place as PlaceIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 
@@ -68,7 +71,7 @@ const Search = () => {
   const [loadingContactId, setLoadingContactId] = useState(null);
   const [error, setError] = useState("");
 
-  // Mapbox autocomplete state
+  // Mapbox autocomplete
   const [locationOptions, setLocationOptions] = useState([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const [selectedLocationOption, setSelectedLocationOption] = useState(null);
@@ -80,9 +83,16 @@ const Search = () => {
     service: searchParams.get("service") || "",
   });
 
+  const [uiFilters, setUiFilters] = useState({
+    verifiedOnly: false,
+    minRating: 0,
+    sortBy: "relevance", // relevance | rating | price_asc | price_desc
+  });
+
   const selectedServiceId = useMemo(() => {
     if (!filters.service) return "";
     if (/^\d+$/.test(String(filters.service))) return String(filters.service);
+
     const found = services.find(
       (s) => s.name?.toLowerCase() === String(filters.service).toLowerCase()
     );
@@ -104,6 +114,7 @@ const Search = () => {
       setFavorites([]);
       return;
     }
+
     setLoadingFavorites(true);
     try {
       const data = await favoritesAPI.listEmployers();
@@ -163,16 +174,19 @@ const Search = () => {
       }
     };
 
-    const timer = setTimeout(run, 350);
+    const timer = setTimeout(run, 320);
     return () => clearTimeout(timer);
   }, [filters.location, mapboxEnabled]);
 
   const handleReset = async () => {
     setFilters({ q: "", location: "", service: "" });
+    setUiFilters({ verifiedOnly: false, minRating: 0, sortBy: "relevance" });
     setSelectedLocationOption(null);
     setError("");
+
     navigate("/search");
     setLoading(true);
+
     try {
       await loadEmployers({});
     } catch (err) {
@@ -256,11 +270,13 @@ const Search = () => {
   const getServiceLabel = (employer) => {
     const serviceName = employer?.service?.name;
     if (serviceName) return serviceName;
+
     const serviceId = employer?.service;
     if (typeof serviceId === "number") {
       const srv = services.find((s) => s.id === serviceId);
       return srv?.name || "Service non précisé";
     }
+
     return "Service non précisé";
   };
 
@@ -268,6 +284,28 @@ const Search = () => {
     if (employer?.address && employer?.city) return `${employer.address}, ${employer.city}`;
     return employer?.city || employer?.address || "Non renseignée";
   };
+
+  const filteredEmployers = useMemo(() => {
+    let list = [...employers];
+
+    if (uiFilters.verifiedOnly) {
+      list = list.filter((e) => !!e.is_verified);
+    }
+
+    if (uiFilters.minRating > 0) {
+      list = list.filter((e) => Number(e.average_rating || 0) >= uiFilters.minRating);
+    }
+
+    if (uiFilters.sortBy === "rating") {
+      list.sort((a, b) => Number(b.average_rating || 0) - Number(a.average_rating || 0));
+    } else if (uiFilters.sortBy === "price_asc") {
+      list.sort((a, b) => Number(a.hourly_rate || Infinity) - Number(b.hourly_rate || Infinity));
+    } else if (uiFilters.sortBy === "price_desc") {
+      list.sort((a, b) => Number(b.hourly_rate || 0) - Number(a.hourly_rate || 0));
+    }
+
+    return list;
+  }, [employers, uiFilters]);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 7 }}>
@@ -277,7 +315,7 @@ const Search = () => {
           mb: 2.5,
           borderRadius: 4,
           background:
-            "radial-gradient(circle at 10% -30%, rgba(243,139,42,.18), transparent 40%), #171b22",
+            "radial-gradient(circle at 10% -30%, rgba(245,158,66,.16), transparent 40%), radial-gradient(circle at 90% 15%, rgba(93,168,255,.10), transparent 30%), #171d28",
         }}
       >
         <Stack
@@ -288,12 +326,12 @@ const Search = () => {
           sx={{ mb: 2 }}
         >
           <Box>
-            <Chip icon={<TuneIcon />} label="Recherche prestataires" color="primary" sx={{ mb: 1 }} />
+            <Chip icon={<TuneIcon />} label="Recherche de prestataires" color="primary" sx={{ mb: 1 }} />
             <Typography variant="h4" sx={{ fontWeight: 800 }}>
               Trouver un prestataire
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Recherchez par service, nom, description et localisation.
+              Recherchez par service, localisation et disponibilité perçue, sans casser l’API actuelle.
             </Typography>
           </Box>
 
@@ -306,8 +344,8 @@ const Search = () => {
 
         {!mapboxEnabled && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Suggestions d’adresse désactivées. Ajoutez <strong>VITE_MAPBOX_TOKEN</strong> dans{" "}
-            <strong>frontend/.env</strong> pour activer l’autocomplete.
+            Suggestions d’adresse désactivées. Le champ texte ville/adresse reste actif (mode MVP).
+            Ajoutez <strong>VITE_MAPBOX_TOKEN</strong> pour activer l’autocomplete Mapbox.
           </Alert>
         )}
 
@@ -366,9 +404,7 @@ const Search = () => {
                   setFilters((p) => ({ ...p, location: value }));
                   if (!value) setSelectedLocationOption(null);
                 }}
-                getOptionLabel={(option) =>
-                  typeof option === "string" ? option : option.label || ""
-                }
+                getOptionLabel={(option) => (typeof option === "string" ? option : option.label || "")}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -399,6 +435,65 @@ const Search = () => {
             </Grid>
           </Grid>
         </form>
+
+        {/* filtres UI frontend-only */}
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 1.6,
+            p: 1.3,
+            borderRadius: 3,
+            bgcolor: alpha("#1D2736", 0.78),
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.2} alignItems={{ xs: "stretch", md: "center" }}>
+            <Stack direction="row" spacing={0.8} alignItems="center">
+              <FilterListIcon fontSize="small" sx={{ color: "text.secondary" }} />
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                Filtres rapides
+              </Typography>
+            </Stack>
+
+            <TextField
+              select
+              size="small"
+              label="Note minimum"
+              value={uiFilters.minRating}
+              onChange={(e) => setUiFilters((p) => ({ ...p, minRating: Number(e.target.value) }))}
+              sx={{ minWidth: 160 }}
+            >
+              <MenuItem value={0}>Toutes</MenuItem>
+              <MenuItem value={3}>3.0+</MenuItem>
+              <MenuItem value={4}>4.0+</MenuItem>
+              <MenuItem value={4.5}>4.5+</MenuItem>
+            </TextField>
+
+            <TextField
+              select
+              size="small"
+              label="Tri"
+              value={uiFilters.sortBy}
+              onChange={(e) => setUiFilters((p) => ({ ...p, sortBy: e.target.value }))}
+              sx={{ minWidth: 190 }}
+            >
+              <MenuItem value="relevance">Pertinence</MenuItem>
+              <MenuItem value="rating">Meilleure note</MenuItem>
+              <MenuItem value="price_asc">Prix croissant</MenuItem>
+              <MenuItem value="price_desc">Prix décroissant</MenuItem>
+            </TextField>
+
+            <Button
+              size="small"
+              variant={uiFilters.verifiedOnly ? "contained" : "outlined"}
+              onClick={() => setUiFilters((p) => ({ ...p, verifiedOnly: !p.verifiedOnly }))}
+              startIcon={<VerifiedIcon />}
+            >
+              Vérifiés uniquement
+            </Button>
+          </Stack>
+        </Paper>
       </Paper>
 
       {loading ? (
@@ -410,13 +505,13 @@ const Search = () => {
         </Paper>
       ) : error ? (
         <Alert severity="error">{error}</Alert>
-      ) : employers.length === 0 ? (
+      ) : filteredEmployers.length === 0 ? (
         <Paper sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
           <Typography variant="h6" sx={{ mb: 0.8 }}>
             Aucun prestataire trouvé
           </Typography>
           <Typography color="text.secondary">
-            Essayez d’élargir vos critères (service, ville, nom).
+            Essayez d’élargir vos critères (service, ville, nom) ou retirez certains filtres.
           </Typography>
         </Paper>
       ) : (
@@ -428,8 +523,8 @@ const Search = () => {
             sx={{ mb: 1.2 }}
           >
             <Typography color="text.secondary">
-              {employers.length} prestataire{employers.length > 1 ? "s" : ""} trouvé
-              {employers.length > 1 ? "s" : ""}.
+              {filteredEmployers.length} prestataire{filteredEmployers.length > 1 ? "s" : ""} trouvé
+              {filteredEmployers.length > 1 ? "s" : ""}.
             </Typography>
             {loadingFavorites && isAuthenticated && isClient && (
               <Typography variant="caption" color="text.secondary">
@@ -441,16 +536,17 @@ const Search = () => {
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
             <InfoIcon fontSize="small" sx={{ color: "text.secondary" }} />
             <Typography variant="caption" color="text.secondary">
-              Sélectionnez un prestataire, contactez-le, puis prenez rendez-vous en un clic.
+              Astuce : contactez le prestataire avant de confirmer un rendez-vous.
             </Typography>
           </Stack>
 
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={2}>
-            {employers.map((employer) => {
+            {filteredEmployers.map((employer) => {
               const isFav = favoriteEmployerIds.has(employer.id);
               const serviceLabel = getServiceLabel(employer);
+              const ratingValue = Number(employer.average_rating || 0);
 
               return (
                 <Grid item xs={12} sm={6} lg={4} key={employer.id}>
@@ -458,7 +554,7 @@ const Search = () => {
                     sx={{
                       height: "100%",
                       borderRadius: 3,
-                      backgroundColor: alpha("#171b22", 0.95),
+                      backgroundColor: alpha("#171d28", 0.95),
                       border: "1px solid",
                       borderColor: "divider",
                       transition: "transform .2s ease, box-shadow .2s ease",
@@ -470,31 +566,37 @@ const Search = () => {
                   >
                     <CardContent>
                       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                        <Box sx={{ minWidth: 0 }}>
-                          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.4 }}>
-                            <PersonIcon fontSize="small" sx={{ color: "primary.main" }} />
-                            <Typography
-                              variant="h6"
-                              sx={{
-                                fontWeight: 800,
-                                lineHeight: 1.2,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                              title={employer.name || "Prestataire"}
-                            >
-                              {employer.name || "Prestataire"}
-                            </Typography>
-                          </Stack>
+                        <Stack direction="row" spacing={1} sx={{ minWidth: 0 }}>
+                          <Avatar sx={{ bgcolor: alpha("#fff", 0.08), width: 38, height: 38 }}>
+                            {(employer.name || "P")[0]}
+                          </Avatar>
 
-                          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
-                            <Chip size="small" label={serviceLabel} variant="outlined" />
-                            {employer.is_verified && (
-                              <Chip size="small" color="success" icon={<VerifiedIcon />} label="Vérifié" />
-                            )}
-                          </Stack>
-                        </Box>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.4 }}>
+                              <PersonIcon fontSize="small" sx={{ color: "primary.main" }} />
+                              <Typography
+                                variant="h6"
+                                sx={{
+                                  fontWeight: 800,
+                                  lineHeight: 1.2,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={employer.name || "Prestataire"}
+                              >
+                                {employer.name || "Prestataire"}
+                              </Typography>
+                            </Stack>
+
+                            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
+                              <Chip size="small" label={serviceLabel} variant="outlined" />
+                              {employer.is_verified && (
+                                <Chip size="small" color="success" icon={<VerifiedIcon />} label="Vérifié" />
+                              )}
+                            </Stack>
+                          </Box>
+                        </Stack>
                       </Stack>
 
                       <Stack spacing={1.1}>
@@ -503,16 +605,19 @@ const Search = () => {
                             Localisation
                           </Typography>
                           <Tooltip title={getLocationLabel(employer)}>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {getLocationLabel(employer)}
-                            </Typography>
+                            <Stack direction="row" spacing={0.6} alignItems="center">
+                              <PlaceIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {getLocationLabel(employer)}
+                              </Typography>
+                            </Stack>
                           </Tooltip>
                         </Box>
 
@@ -535,14 +640,9 @@ const Search = () => {
 
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ pt: 0.5 }}>
                           <Stack direction="row" alignItems="center" spacing={0.7}>
-                            <Rating
-                              value={Number(employer.average_rating || 0)}
-                              precision={0.1}
-                              readOnly
-                              size="small"
-                            />
+                            <Rating value={ratingValue} precision={0.1} readOnly size="small" />
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {Number(employer.average_rating || 0).toFixed(1)}
+                              {ratingValue.toFixed(1)}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               ({employer.total_reviews || 0})

@@ -28,6 +28,7 @@ import {
   LockReset as LockResetIcon,
   DeleteForever as DeleteIcon,
   HomeWork as HomeWorkIcon,
+  Shield as ShieldIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
@@ -102,6 +103,7 @@ const Profile = () => {
   };
 
   useEffect(() => {
+    // rôle strict : un seul profil affiché selon user.role
     if (isClient) {
       setProfileForm({
         first_name: user?.first_name || "",
@@ -110,9 +112,7 @@ const Profile = () => {
         phone: clientProfile?.phone || user?.phone || "",
         address: clientProfile?.address || user?.address || "",
         city: clientProfile?.city || "",
-        name:
-          clientProfile?.name ||
-          `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
+        name: clientProfile?.name || `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
         description: "",
         hourly_rate: "",
         is_available: true,
@@ -131,14 +131,11 @@ const Profile = () => {
         name: employerProfile?.name || "",
         description: employerProfile?.description || "",
         hourly_rate:
-          employerProfile?.hourly_rate !== null &&
-          employerProfile?.hourly_rate !== undefined
+          employerProfile?.hourly_rate !== null && employerProfile?.hourly_rate !== undefined
             ? String(employerProfile.hourly_rate)
             : "",
         is_available:
-          typeof employerProfile?.is_available === "boolean"
-            ? employerProfile.is_available
-            : true,
+          typeof employerProfile?.is_available === "boolean" ? employerProfile.is_available : true,
       });
     }
   }, [isClient, isEmployer, user, clientProfile, employerProfile]);
@@ -198,7 +195,6 @@ const Profile = () => {
     setLoadingProfile(true);
 
     try {
-      // 1) Mise à jour user de base (toujours)
       await userAPI.updateUser({
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
@@ -207,13 +203,10 @@ const Profile = () => {
         address: profileForm.address,
       });
 
-      // 2) Mise à jour profil par rôle (strict, pas de mélange)
       if (isClient) {
         await userAPI.updateProfile(
           {
-            name:
-              profileForm.name ||
-              `${profileForm.first_name} ${profileForm.last_name}`.trim(),
+            name: profileForm.name || `${profileForm.first_name} ${profileForm.last_name}`.trim(),
             email: profileForm.email,
             phone: profileForm.phone,
             address: profileForm.address,
@@ -230,10 +223,7 @@ const Profile = () => {
             address: profileForm.address,
             city: profileForm.city,
             description: profileForm.description,
-            hourly_rate:
-              profileForm.hourly_rate === ""
-                ? null
-                : Number(profileForm.hourly_rate),
+            hourly_rate: profileForm.hourly_rate === "" ? null : Number(profileForm.hourly_rate),
             is_available: !!profileForm.is_available,
           },
           "employer"
@@ -299,14 +289,22 @@ const Profile = () => {
     }
   };
 
+  const isRoleKnown = isClient || isEmployer;
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
+      {!isRoleKnown && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Votre rôle de compte est introuvable. Veuillez vous reconnecter.
+        </Alert>
+      )}
+
       <Paper
         sx={{
           p: { xs: 2, md: 3 },
           borderRadius: 4,
           background:
-            "radial-gradient(circle at 10% -30%, rgba(243,139,42,.18), transparent 40%), #171b22",
+            "radial-gradient(circle at 10% -30%, rgba(245,158,66,.16), transparent 40%), #171d28",
         }}
       >
         <Stack
@@ -319,7 +317,7 @@ const Profile = () => {
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Avatar
               sx={{
-                bgcolor: alpha("#f38b2a", 0.25),
+                bgcolor: alpha("#f59e42", 0.24),
                 color: "#ffd9b0",
                 border: "1px solid",
                 borderColor: "divider",
@@ -337,7 +335,7 @@ const Profile = () => {
               </Typography>
               <Typography color="text.secondary">
                 {isClient
-                  ? "Gérez vos informations personnelles de réservation."
+                  ? "Gérez vos informations personnelles et de réservation."
                   : "Gérez vos informations professionnelles et votre visibilité."}
               </Typography>
             </Box>
@@ -346,13 +344,13 @@ const Profile = () => {
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip
               icon={<PersonIcon />}
-              label={isClient ? "Compte client" : "Compte utilisateur"}
+              label={isClient ? "Compte client actif" : "Compte client inactif"}
               color={isClient ? "success" : "default"}
               variant={isClient ? "filled" : "outlined"}
             />
             <Chip
               icon={<BusinessIcon />}
-              label={isEmployer ? "Compte prestataire" : "Non prestataire"}
+              label={isEmployer ? "Compte prestataire actif" : "Compte prestataire inactif"}
               color={isEmployer ? "success" : "default"}
               variant={isEmployer ? "filled" : "outlined"}
             />
@@ -361,9 +359,8 @@ const Profile = () => {
 
         {!mapboxEnabled && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Suggestions d’adresse désactivées. Ajoutez{" "}
-            <strong>VITE_MAPBOX_TOKEN</strong> dans le fichier <strong>.env</strong>{" "}
-            du frontend pour activer l’autocomplete.
+            Suggestions d’adresse désactivées. Ajoutez <strong>VITE_MAPBOX_TOKEN</strong> dans le
+            frontend pour activer l’autocomplete.
           </Alert>
         )}
 
@@ -380,9 +377,9 @@ const Profile = () => {
 
         <Grid container spacing={2}>
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#121824", 0.5) }}>
               <Typography sx={{ fontWeight: 800, mb: 1.2 }}>
-                {isClient ? "Profil client" : "Profil prestataire"}
+                {isClient ? "Informations client" : "Informations prestataire"}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
 
@@ -393,9 +390,7 @@ const Profile = () => {
                       fullWidth
                       label="Prénom"
                       value={profileForm.first_name}
-                      onChange={(e) =>
-                        handleProfileField("first_name", e.target.value)
-                      }
+                      onChange={(e) => handleProfileField("first_name", e.target.value)}
                     />
                   </Grid>
 
@@ -404,9 +399,7 @@ const Profile = () => {
                       fullWidth
                       label="Nom"
                       value={profileForm.last_name}
-                      onChange={(e) =>
-                        handleProfileField("last_name", e.target.value)
-                      }
+                      onChange={(e) => handleProfileField("last_name", e.target.value)}
                     />
                   </Grid>
 
@@ -453,13 +446,9 @@ const Profile = () => {
                       freeSolo
                       options={addressOptions}
                       loading={addressLoading}
-                      getOptionLabel={(option) =>
-                        typeof option === "string" ? option : option.label || ""
-                      }
+                      getOptionLabel={(option) => (typeof option === "string" ? option : option.label || "")}
                       filterOptions={(x) => x}
-                      onInputChange={(_, value) =>
-                        handleProfileField("address", value)
-                      }
+                      onInputChange={(_, value) => handleProfileField("address", value)}
                       onChange={(_, selected) => {
                         if (selected && typeof selected !== "string") {
                           handleSelectAddress(selected);
@@ -476,9 +465,7 @@ const Profile = () => {
                             ...params.InputProps,
                             endAdornment: (
                               <>
-                                {addressLoading ? (
-                                  <CircularProgress color="inherit" size={18} />
-                                ) : null}
+                                {addressLoading ? <CircularProgress color="inherit" size={18} /> : null}
                                 {params.InputProps.endAdornment}
                               </>
                             ),
@@ -496,9 +483,7 @@ const Profile = () => {
                           label="Tarif horaire (DA)"
                           type="number"
                           value={profileForm.hourly_rate}
-                          onChange={(e) =>
-                            handleProfileField("hourly_rate", e.target.value)
-                          }
+                          onChange={(e) => handleProfileField("hourly_rate", e.target.value)}
                         />
                       </Grid>
 
@@ -506,14 +491,9 @@ const Profile = () => {
                         <TextField
                           select
                           fullWidth
-                          label="Disponibilité / statut"
+                          label="Disponibilité"
                           value={profileForm.is_available ? "available" : "unavailable"}
-                          onChange={(e) =>
-                            handleProfileField(
-                              "is_available",
-                              e.target.value === "available"
-                            )
-                          }
+                          onChange={(e) => handleProfileField("is_available", e.target.value === "available")}
                         >
                           <MenuItem value="available">Disponible</MenuItem>
                           <MenuItem value="unavailable">Indisponible</MenuItem>
@@ -527,10 +507,8 @@ const Profile = () => {
                           minRows={3}
                           label="Description"
                           value={profileForm.description}
-                          onChange={(e) =>
-                            handleProfileField("description", e.target.value)
-                          }
-                          placeholder="Présentez vos services, votre expérience, zones couvertes..."
+                          onChange={(e) => handleProfileField("description", e.target.value)}
+                          placeholder="Présentez vos services, expérience et zones couvertes..."
                         />
                       </Grid>
                     </>
@@ -541,11 +519,9 @@ const Profile = () => {
                       variant="contained"
                       type="submit"
                       startIcon={<SaveIcon />}
-                      disabled={loadingProfile}
+                      disabled={loadingProfile || !isRoleKnown}
                     >
-                      {loadingProfile
-                        ? "Sauvegarde..."
-                        : `Sauvegarder le profil ${roleLabel}`}
+                      {loadingProfile ? "Sauvegarde..." : `Sauvegarder le profil ${roleLabel}`}
                     </Button>
                   </Grid>
                 </Grid>
@@ -554,10 +530,11 @@ const Profile = () => {
           </Grid>
 
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#111318", 0.45) }}>
-              <Typography sx={{ fontWeight: 800, mb: 1.2 }}>
-                Sécurité du compte
-              </Typography>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha("#121824", 0.5) }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.2 }}>
+                <ShieldIcon sx={{ color: "primary.main" }} />
+                <Typography sx={{ fontWeight: 800 }}>Sécurité du compte</Typography>
+              </Stack>
               <Divider sx={{ mb: 1.5 }} />
 
               <Box component="form" onSubmit={submitPasswordChange}>
@@ -568,9 +545,7 @@ const Profile = () => {
                       type="password"
                       label="Mot de passe actuel"
                       value={passwordForm.current_password}
-                      onChange={(e) =>
-                        handlePasswordField("current_password", e.target.value)
-                      }
+                      onChange={(e) => handlePasswordField("current_password", e.target.value)}
                     />
                   </Grid>
 
@@ -580,9 +555,7 @@ const Profile = () => {
                       type="password"
                       label="Nouveau mot de passe"
                       value={passwordForm.new_password}
-                      onChange={(e) =>
-                        handlePasswordField("new_password", e.target.value)
-                      }
+                      onChange={(e) => handlePasswordField("new_password", e.target.value)}
                     />
                   </Grid>
 
@@ -592,9 +565,7 @@ const Profile = () => {
                       type="password"
                       label="Confirmer le nouveau mot de passe"
                       value={passwordForm.confirm_password}
-                      onChange={(e) =>
-                        handlePasswordField("confirm_password", e.target.value)
-                      }
+                      onChange={(e) => handlePasswordField("confirm_password", e.target.value)}
                     />
                   </Grid>
 
@@ -605,9 +576,7 @@ const Profile = () => {
                       startIcon={<LockResetIcon />}
                       disabled={loadingPassword}
                     >
-                      {loadingPassword
-                        ? "Modification..."
-                        : "Changer le mot de passe"}
+                      {loadingPassword ? "Modification..." : "Changer le mot de passe"}
                     </Button>
                   </Grid>
                 </Grid>
@@ -623,8 +592,7 @@ const Profile = () => {
               </Stack>
 
               <Typography color="text.secondary" sx={{ mb: 1.2 }}>
-                Cette action supprime définitivement votre compte {roleLabel} et toutes
-                vos données associées.
+                Cette action supprime définitivement votre compte {roleLabel} et ses données liées.
               </Typography>
 
               <Button
@@ -644,8 +612,7 @@ const Profile = () => {
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est
-            irréversible.
+            Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

@@ -38,6 +38,7 @@ import {
   Chat as ChatIcon,
   Help as HelpIcon,
   WorkOutline as WorkOutlineIcon,
+  AccountCircle as AccountCircleIcon,
 } from "@mui/icons-material";
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -66,6 +67,12 @@ const Navigation = () => {
     return full || user.username || user.email || "Utilisateur";
   }, [user]);
 
+  const userRoleLabel = useMemo(() => {
+    if (isEmployer) return "Prestataire";
+    if (isClient) return "Client";
+    return "Visiteur";
+  }, [isEmployer, isClient]);
+
   const userAvatarSrc = useMemo(() => {
     if (!user?.profile_picture) return "";
     const src = String(user.profile_picture);
@@ -74,24 +81,42 @@ const Navigation = () => {
     return `${API_URL}/${src}`;
   }, [user, API_URL]);
 
-  const menuItems = useMemo(
-    () => [
-      { text: "Accueil", icon: <HomeIcon />, path: "/", auth: false },
-      { text: "Rechercher", icon: <SearchIcon />, path: "/search", auth: false, clientOnly: true },
-      { text: "Rendez-vous", icon: <CalendarIcon />, path: "/appointments", auth: true },
-      { text: "Favoris", icon: <FavoriteIcon />, path: "/favorites", auth: true, clientOnly: true },
-      { text: "Messages", icon: <ChatIcon />, path: "/messages", auth: true },
-      { text: "Aide", icon: <HelpIcon />, path: "/help", auth: false },
-    ],
-    []
-  );
+  const menuItems = useMemo(() => {
+    if (!user) {
+      return [
+        { text: "Accueil", icon: <HomeIcon />, path: "/", auth: false },
+        { text: "Rechercher", icon: <SearchIcon />, path: "/search", auth: true }, // redirige login si non connecté
+        { text: "Connexion", icon: <PersonIcon />, path: "/login", auth: false },
+        { text: "Inscription", icon: <WorkOutlineIcon />, path: "/register", auth: false },
+      ];
+    }
 
-  const filteredMenuItems = useMemo(() => {
-    return menuItems.filter((item) => {
-      if (item.clientOnly && isEmployer) return false;
-      return true;
-    });
-  }, [menuItems, isEmployer]);
+    if (isClient) {
+      return [
+        { text: "Accueil", icon: <HomeIcon />, path: "/", auth: false },
+        { text: "Rechercher", icon: <SearchIcon />, path: "/search", auth: true },
+        { text: "Rendez-vous", icon: <CalendarIcon />, path: "/appointments", auth: true },
+        { text: "Favoris", icon: <FavoriteIcon />, path: "/favorites", auth: true },
+        { text: "Messages", icon: <ChatIcon />, path: "/messages", auth: true },
+        { text: "Aide", icon: <HelpIcon />, path: "/help", auth: false },
+      ];
+    }
+
+    if (isEmployer) {
+      return [
+        { text: "Accueil", icon: <HomeIcon />, path: "/", auth: false },
+        { text: "Rendez-vous reçus", icon: <CalendarIcon />, path: "/appointments", auth: true },
+        { text: "Messages", icon: <ChatIcon />, path: "/messages", auth: true },
+        { text: "Profil", icon: <AccountCircleIcon />, path: "/profile", auth: true },
+        { text: "Aide", icon: <HelpIcon />, path: "/help", auth: false },
+      ];
+    }
+
+    return [
+      { text: "Accueil", icon: <HomeIcon />, path: "/", auth: false },
+      { text: "Aide", icon: <HelpIcon />, path: "/help", auth: false },
+    ];
+  }, [user, isClient, isEmployer]);
 
   const handleDrawerToggle = () => setMobileOpen((v) => !v);
 
@@ -165,23 +190,23 @@ const Navigation = () => {
   });
 
   const drawer = (
-    <Box sx={{ width: 300, height: "100%", bgcolor: "background.paper", p: 1.5 }}>
+    <Box sx={{ width: 310, height: "100%", bgcolor: "background.paper", p: 1.5 }}>
       <Box sx={{ px: 1, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary", letterSpacing: "-0.02em" }}>
             Nazek
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Premium services platform
+            Plateforme premium de réservation
           </Typography>
         </Box>
-        <Chip label={isEmployer ? "Pro" : "Client"} size="small" color="primary" />
+        <Chip label={userRoleLabel} size="small" color="primary" />
       </Box>
 
       <Divider sx={{ borderColor: "divider", mb: 1.5 }} />
 
       <List sx={{ px: 0.5 }}>
-        {filteredMenuItems.map((item) => (
+        {menuItems.map((item) => (
           <ListItemButton
             key={item.text}
             selected={location.pathname === item.path}
@@ -232,35 +257,7 @@ const Navigation = () => {
               <ListItemText primary="Déconnexion" />
             </ListItemButton>
           </>
-        ) : (
-          <>
-            <ListItemButton
-              onClick={() => {
-                navigate("/login", { state: { from: location.pathname } });
-                if (isMobile) setMobileOpen(false);
-              }}
-              sx={{ borderRadius: 2, mb: 0.6 }}
-            >
-              <ListItemIcon sx={{ minWidth: 38, color: "text.secondary" }}>
-                <PersonIcon />
-              </ListItemIcon>
-              <ListItemText primary="Connexion" />
-            </ListItemButton>
-
-            <ListItemButton
-              onClick={() => {
-                navigate("/register");
-                if (isMobile) setMobileOpen(false);
-              }}
-              sx={{ borderRadius: 2 }}
-            >
-              <ListItemIcon sx={{ minWidth: 38, color: "text.secondary" }}>
-                <WorkOutlineIcon />
-              </ListItemIcon>
-              <ListItemText primary="Inscription" />
-            </ListItemButton>
-          </>
-        )}
+        ) : null}
       </List>
     </Box>
   );
@@ -303,7 +300,7 @@ const Navigation = () => {
 
             {!isMobile && (
               <Box sx={{ display: "flex", gap: 0.45, minWidth: 0, overflowX: "auto", py: 0.2, pr: 0.4 }}>
-                {filteredMenuItems.map((item) => (
+                {menuItems.map((item) => (
                   <Button
                     key={item.text}
                     startIcon={item.icon}
@@ -329,11 +326,13 @@ const Navigation = () => {
                 </IconButton>
               </Tooltip>
 
-              <IconButton onClick={openUserMenu} sx={{ p: 0.2 }}>
-                <Avatar src={userAvatarSrc} sx={{ width: 34, height: 34 }}>
-                  {userDisplayName?.[0]?.toUpperCase() || "U"}
-                </Avatar>
-              </IconButton>
+              <Tooltip title={userDisplayName}>
+                <IconButton onClick={openUserMenu} sx={{ p: 0.2 }}>
+                  <Avatar src={userAvatarSrc} sx={{ width: 34, height: 34 }}>
+                    {userDisplayName?.[0]?.toUpperCase() || "U"}
+                  </Avatar>
+                </IconButton>
+              </Tooltip>
             </Box>
           ) : (
             <Box sx={{ display: "flex", gap: 1 }}>
@@ -359,7 +358,7 @@ const Navigation = () => {
             closeUserMenu();
           }}
         >
-          Mon profil
+          Profil
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -367,7 +366,7 @@ const Navigation = () => {
             closeUserMenu();
           }}
         >
-          Mes rendez-vous
+          Rendez-vous
         </MenuItem>
         <Divider />
         <MenuItem onClick={handleLogout}>Déconnexion</MenuItem>
@@ -377,7 +376,7 @@ const Navigation = () => {
         anchorEl={anchorNotifMenu}
         open={Boolean(anchorNotifMenu)}
         onClose={closeNotifMenu}
-        PaperProps={{ sx: { width: 340, maxHeight: 420 } }}
+        PaperProps={{ sx: { width: 360, maxHeight: 430 } }}
       >
         <Box sx={{ px: 1.5, py: 1, fontWeight: 700 }}>Notifications</Box>
         <Divider />
@@ -395,7 +394,7 @@ const Navigation = () => {
               onClick={() => {
                 if (!n.is_read) handleMarkRead(n.id);
               }}
-              sx={{ alignItems: "flex-start", whiteSpace: "normal", opacity: n.is_read ? 0.8 : 1 }}
+              sx={{ alignItems: "flex-start", whiteSpace: "normal", opacity: n.is_read ? 0.78 : 1 }}
             >
               <Box>
                 <Typography sx={{ fontWeight: n.is_read ? 500 : 700 }}>
