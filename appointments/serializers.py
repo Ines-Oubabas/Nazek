@@ -188,6 +188,12 @@ class EmployerSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    hourly_rate = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=2,
+    )
 
     class Meta:
         model = Employer
@@ -293,7 +299,12 @@ class EmployerProfileUpsertSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True)
     city = serializers.CharField(required=False, allow_blank=True, max_length=120)
     address = serializers.CharField(required=False, allow_blank=True)
-    hourly_rate = serializers.DecimalField(required=False, max_digits=10, decimal_places=2)
+    hourly_rate = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=10,
+        decimal_places=2,
+    )
     is_active = serializers.BooleanField(required=False)
 
     def validate_email(self, value):
@@ -504,9 +515,19 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = [
+            "client",
+            "employer",
+            "service",
+            "date",
+            "status",
+            "payment_method",
+            "total_amount",
             "is_paid",
+            "feedback",
+            "rating",
             "canceled_at",
             "canceled_by",
+            "cancel_reason",
             "created_at",
             "updated_at",
         ]
