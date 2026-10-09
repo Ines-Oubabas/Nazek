@@ -1,5 +1,22 @@
-import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from "react";
-import { authAPI, userAPI, clearTokens } from "../services/api";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import {
+  StaleSessionError,
+  authAPI,
+  userAPI,
+  clearTokens,
+  getAuthSessionVersion,
+  hasStoredTokens,
+  isStaleSessionError,
+  subscribeAuthState,
+} from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -22,6 +39,10 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const mountedRef = useRef(false);
+  const requestVersionRef = useRef(0);
+  const authActionVersionRef = useRef(0);
+
   const isAuthenticated = useMemo(() => !!user, [user]);
 
   const { isClient, isEmployer, clientProfile, employerProfile } = useMemo(
@@ -29,164 +50,447 @@ export const AuthProvider = ({ children }) => {
     [user, profiles]
   );
 
-  const clearAuthState = useCallback(() => {
+  const invalidatePendingRequests = useCallback(() => {
+    requestVersionRef.current += 1;
+    return requestVersionRef.current;
+  }, []);
+
+  const beginAuthAction = useCallback(() => {
+    authActionVersionRef.current += 1;
+    return authActionVersionRef.current;
+  }, []);
+
+  const isAuthActionCurrent = useCallback(
+    (actionVersion) =>
+      mountedRef.current &&
+      authActionVersionRef.current === actionVersion,
+    []
+  );
+
+  const clearDisplayedAuthState = useCallback(() => {
+    invalidatePendingRequests();
+
+    if (!mountedRef.current) return;
+
     setUser(null);
     setProfiles(null);
-    clearTokens();
-  }, []);
+  }, [invalidatePendingRequests]);
 
-  const loadProfiles = useCallback(async () => {
-    try {
-      const data = await authAPI.getProfiles();
-      setProfiles(data || null);
-      return data || null;
-    } catch {
-      setProfiles(null);
-      return null;
-    }
-  }, []);
+  const beginTrackedRequest = useCallback(() => {
+    const requestVersion = invalidatePendingRequests();
+
+    return {
+      requestVersion,
+      sessionVersion: getAuthSessionVersion(),
+    };
+  }, [invalidatePendingRequests]);
+
+  const isTrackedRequestCurrent = useCallback(
+    ({ requestVersion, sessionVersion }) =>
+      mountedRef.current &&
+      requestVersionRef.current === requestVersion &&
+      getAuthSessionVersion() === sessionVersion &&
+      hasStoredTokens(),
+    []
+  );
+
+  const loadProfilesForRequest = useCallback(
+    async (requestState) => {
+      try {
+        const data = await authAPI.getProfiles();
+
+        if (!isTrackedRequestCurrent(requestState)) {
+          return null;
+        }
+
+        const nextProfiles = data || null;
+        setProfiles(nextProfiles);
+        return nextProfiles;
+      } catch (err) {
+        if (isStaleSessionError(err)) {
+          return null;
+        }
+
+        if (!isTrackedRequestCurrent(requestState)) {
+          return null;
+        }
+
+        setProfiles(null);
+        return null;
+      }
+    },
+    [isTrackedRequestCurrent]
+  );
 
   const refreshUser = useCallback(async () => {
-    try {
-      setError("");
-      const userData = await authAPI.getUser();
-      setUser(userData || null);
-      await loadProfiles();
-      return userData || null;
-    } catch {
-      clearAuthState();
+    if (!hasStoredTokens()) {
+      clearDisplayedAuthState();
       return null;
     }
-  }, [loadProfiles, clearAuthState]);
+
+    const requestState = beginTrackedRequest();
+
+    try {
+      setError("");
+
+      const userData = await authAPI.getUser();
+
+      if (!isTrackedRequestCurrent(requestState)) {
+        return null;
+      }
+
+      const nextUser = userData || null;
+      setUser(nextUser);
+
+      if (!nextUser) {
+        setProfiles(null);
+        return null;
+      }
+
+      await loadProfilesForRequest(requestState);
+
+      if (!isTrackedRequestCurrent(requestState)) {
+        return null;
+      }
+
+      return nextUser;
+    } catch (err) {
+      if (isStaleSessionError(err)) {
+        return null;
+      }
+
+      if (isTrackedRequestCurrent(requestState)) {
+        clearTokens("user-refresh-failed");
+      }
+
+      return null;
+    }
+  }, [
+    beginTrackedRequest,
+    clearDisplayedAuthState,
+    isTrackedRequestCurrent,
+    loadProfilesForRequest,
+  ]);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
 
-    const init = async () => {
+    const unsubscribe = subscribeAuthState(({ reason, isAuthenticated: hasSession }) => {
+      const mustClearDisplayedState =
+        !hasSession ||
+        reason === "account-change-started" ||
+        reason === "logout" ||
+        reason === "session-expired" ||
+        reason === "account-deleted" ||
+        reason === "user-refresh-failed";
+
+      if (!mustClearDisplayedState) return;
+
+      invalidatePendingRequests();
+      setUser(null);
+      setProfiles(null);
+
+      if (reason === "session-expired") {
+        setError("Votre session a expiré. Veuillez vous reconnecter.");
+      } else if (reason !== "account-change-started") {
+        setError("");
+      }
+    });
+
+    return () => {
+      mountedRef.current = false;
+      invalidatePendingRequests();
+      authActionVersionRef.current += 1;
+      unsubscribe();
+    };
+  }, [invalidatePendingRequests]);
+
+  useEffect(() => {
+    let active = true;
+
+    const initializeSession = async () => {
+      if (!hasStoredTokens()) {
+        if (active && mountedRef.current) {
+          setUser(null);
+          setProfiles(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const requestState = beginTrackedRequest();
+
       try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          if (mounted) {
-            setUser(null);
-            setProfiles(null);
-          }
+        const userData = await authAPI.getUser();
+
+        if (!active || !isTrackedRequestCurrent(requestState)) {
           return;
         }
 
-        const userData = await authAPI.getUser();
-        if (!mounted) return;
-        setUser(userData || null);
+        const nextUser = userData || null;
+        setUser(nextUser);
 
-        try {
-          const profilesData = await authAPI.getProfiles();
-          if (!mounted) return;
-          setProfiles(profilesData || null);
-        } catch {
-          if (!mounted) return;
+        if (!nextUser) {
           setProfiles(null);
+          return;
         }
-      } catch {
-        if (mounted) clearAuthState();
+
+        await loadProfilesForRequest(requestState);
+      } catch (err) {
+        if (
+          !isStaleSessionError(err) &&
+          active &&
+          isTrackedRequestCurrent(requestState)
+        ) {
+          clearTokens("initialization-failed");
+        }
       } finally {
-        if (mounted) setLoading(false);
+        if (active && mountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
-    init();
+    initializeSession();
 
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, [clearAuthState]);
+  }, [
+    beginTrackedRequest,
+    isTrackedRequestCurrent,
+    loadProfilesForRequest,
+  ]);
 
   const login = useCallback(
     async (emailOrPayload, password) => {
+      const actionVersion = beginAuthAction();
+
+      clearDisplayedAuthState();
+      setError("");
+
+      const payload =
+        typeof emailOrPayload === "object"
+          ? emailOrPayload
+          : { email: emailOrPayload, password };
+
       try {
-        setError("");
-
-        const payload =
-          typeof emailOrPayload === "object"
-            ? emailOrPayload
-            : { email: emailOrPayload, password };
-
         const response = await authAPI.login(payload);
 
-        const userData = response?.user || null;
-        setUser(userData);
+        if (!isAuthActionCurrent(actionVersion)) {
+          throw new StaleSessionError();
+        }
 
+        const requestState = beginTrackedRequest();
+
+        if (!isTrackedRequestCurrent(requestState)) {
+          throw new StaleSessionError();
+        }
+
+        const userData = response?.user || null;
         const responseProfiles = response?.profiles || null;
-        if (responseProfiles) {
-          setProfiles(responseProfiles);
-        } else {
-          await loadProfiles();
+
+        setUser(userData);
+        setProfiles(responseProfiles);
+
+        if (userData && !responseProfiles) {
+          await loadProfilesForRequest(requestState);
+        }
+
+        if (
+          !isAuthActionCurrent(actionVersion) ||
+          !isTrackedRequestCurrent(requestState)
+        ) {
+          throw new StaleSessionError();
         }
 
         return response;
       } catch (err) {
+        if (
+          isStaleSessionError(err) ||
+          !isAuthActionCurrent(actionVersion)
+        ) {
+          throw isStaleSessionError(err)
+            ? err
+            : new StaleSessionError();
+        }
+
         setError(err?.message || "Erreur de connexion");
         throw err;
       }
     },
-    [loadProfiles]
+    [
+      beginAuthAction,
+      beginTrackedRequest,
+      clearDisplayedAuthState,
+      isAuthActionCurrent,
+      isTrackedRequestCurrent,
+      loadProfilesForRequest,
+    ]
   );
 
   const register = useCallback(
     async (userData) => {
-      try {
-        setError("");
+      const actionVersion = beginAuthAction();
 
+      clearDisplayedAuthState();
+      setError("");
+
+      try {
         const response = await authAPI.register(userData);
 
-        const createdUser = response?.user || null;
-        setUser(createdUser);
+        if (!isAuthActionCurrent(actionVersion)) {
+          throw new StaleSessionError();
+        }
 
+        const requestState = beginTrackedRequest();
+
+        if (!isTrackedRequestCurrent(requestState)) {
+          throw new StaleSessionError();
+        }
+
+        const createdUser = response?.user || null;
         const responseProfiles = response?.profiles || null;
-        if (responseProfiles) {
-          setProfiles(responseProfiles);
-        } else {
-          await loadProfiles();
+
+        setUser(createdUser);
+        setProfiles(responseProfiles);
+
+        if (createdUser && !responseProfiles) {
+          await loadProfilesForRequest(requestState);
+        }
+
+        if (
+          !isAuthActionCurrent(actionVersion) ||
+          !isTrackedRequestCurrent(requestState)
+        ) {
+          throw new StaleSessionError();
         }
 
         return response;
       } catch (err) {
+        if (
+          isStaleSessionError(err) ||
+          !isAuthActionCurrent(actionVersion)
+        ) {
+          throw isStaleSessionError(err)
+            ? err
+            : new StaleSessionError();
+        }
+
         setError(err?.message || "Erreur d'inscription");
         throw err;
       }
     },
-    [loadProfiles]
+    [
+      beginAuthAction,
+      beginTrackedRequest,
+      clearDisplayedAuthState,
+      isAuthActionCurrent,
+      isTrackedRequestCurrent,
+      loadProfilesForRequest,
+    ]
   );
 
   const logout = useCallback(async () => {
+    beginAuthAction();
+    clearDisplayedAuthState();
+    setError("");
+
     try {
-      setError("");
       await authAPI.logout();
-    } catch {
-      // no-op
-    } finally {
-      clearAuthState();
+    } catch (err) {
+      if (!isStaleSessionError(err)) {
+        // La session locale est déjà supprimée.
+        // Un échec de blacklistage distant ne doit pas restaurer la session.
+      }
     }
-  }, [clearAuthState]);
+  }, [
+    beginAuthAction,
+    clearDisplayedAuthState,
+  ]);
 
   const updateUser = useCallback(
     async (data) => {
+      if (!hasStoredTokens()) {
+        clearDisplayedAuthState();
+        return null;
+      }
+
+      const requestState = beginTrackedRequest();
+
       try {
         setError("");
+
         const updated = await userAPI.updateUser(data);
-        setUser(updated || null);
-        await loadProfiles();
-        return updated;
+
+        if (!isTrackedRequestCurrent(requestState)) {
+          return null;
+        }
+
+        const nextUser = updated || null;
+        setUser(nextUser);
+
+        if (!nextUser) {
+          setProfiles(null);
+          return null;
+        }
+
+        await loadProfilesForRequest(requestState);
+
+        if (!isTrackedRequestCurrent(requestState)) {
+          return null;
+        }
+
+        return nextUser;
       } catch (err) {
-        setError(err?.message || "Erreur de mise à jour");
+        if (isStaleSessionError(err)) {
+          return null;
+        }
+
+        if (isTrackedRequestCurrent(requestState)) {
+          setError(err?.message || "Erreur de mise à jour");
+        }
+
         throw err;
       }
     },
-    [loadProfiles]
+    [
+      beginTrackedRequest,
+      clearDisplayedAuthState,
+      isTrackedRequestCurrent,
+      loadProfilesForRequest,
+    ]
   );
 
   const deleteAccount = useCallback(async () => {
-    await authAPI.deleteMe();
-    clearAuthState();
-  }, [clearAuthState]);
+    if (!hasStoredTokens()) {
+      clearDisplayedAuthState();
+      return null;
+    }
+
+    const requestState = beginTrackedRequest();
+
+    try {
+      const response = await authAPI.deleteMe();
+
+      if (!isTrackedRequestCurrent(requestState)) {
+        return response;
+      }
+
+      clearDisplayedAuthState();
+      return response;
+    } catch (err) {
+      if (isStaleSessionError(err)) {
+        return null;
+      }
+
+      throw err;
+    }
+  }, [
+    beginTrackedRequest,
+    clearDisplayedAuthState,
+    isTrackedRequestCurrent,
+  ]);
 
   const value = {
     user,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, Link as RouterLink } from "react-router-dom";
 import {
   Alert,
@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useAuth } from "../contexts/AuthContext";
+import { isStaleSessionError } from "../services/api";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -24,25 +25,57 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const attemptVersionRef = useRef(0);
+
   const from = location.state?.from || "/";
+
+  useEffect(
+    () => () => {
+      attemptVersionRef.current += 1;
+    },
+    []
+  );
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
+    const attemptVersion = attemptVersionRef.current + 1;
+    attemptVersionRef.current = attemptVersion;
+
     setErrorMsg("");
     setLoading(true);
 
     try {
       await login({ email, password });
+
+      if (attemptVersionRef.current !== attemptVersion) {
+        return;
+      }
+
+      attemptVersionRef.current += 1;
       navigate(from, { replace: true });
     } catch (err) {
+      if (
+        attemptVersionRef.current !== attemptVersion ||
+        isStaleSessionError(err)
+      ) {
+        return;
+      }
+
       const raw = err?.message || "Connexion impossible.";
-      if (raw.toLowerCase().includes("incorrect") || raw.toLowerCase().includes("invalid")) {
+
+      if (
+        raw.toLowerCase().includes("incorrect") ||
+        raw.toLowerCase().includes("invalid")
+      ) {
         setErrorMsg("Mot de passe incorrect ou compte introuvable.");
       } else {
         setErrorMsg(raw);
       }
     } finally {
-      setLoading(false);
+      if (attemptVersionRef.current === attemptVersion) {
+        setLoading(false);
+      }
     }
   };
 

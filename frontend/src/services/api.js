@@ -13,27 +13,221 @@ const api = axios.create({
 
 const ACCESS_TOKEN_KEY = "token";
 const REFRESH_TOKEN_KEY = "refresh_token";
+const STALE_SESSION_ERROR_CODE = "STALE_SESSION";
 
-const getAccessToken = () => localStorage.getItem(ACCESS_TOKEN_KEY);
-const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
+let authSessionVersion = 0;
+const authStateListeners = new Set();
 
-export const setTokens = ({ access, refresh } = {}) => {
-  if (access) localStorage.setItem(ACCESS_TOKEN_KEY, access);
-  if (refresh) localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+export class StaleSessionError extends Error {
+  constructor(message = "Cette réponse appartient à une session qui n’est plus active.") {
+    super(message);
+    this.name = "StaleSessionError";
+    this.code = STALE_SESSION_ERROR_CODE;
+    this.isStaleSession = true;
+  }
+}
+
+export const isStaleSessionError = (error) =>
+  error?.code === STALE_SESSION_ERROR_CODE || error?.isStaleSession === true;
+
+const getSessionStorage = () => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 };
 
-export const clearTokens = () => {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+const readSessionValue = (key) => {
+  const storage = getSessionStorage();
+  if (!storage) return null;
+
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const writeSessionValue = (key, value) => {
+  const storage = getSessionStorage();
+  if (!storage) return;
+
+  try {
+    if (value) {
+      storage.setItem(key, value);
+    } else {
+      storage.removeItem(key);
+    }
+  } catch {
+    // Le stockage peut être indisponible ou bloqué par le navigateur.
+  }
+};
+
+const removeSessionValue = (key) => {
+  const storage = getSessionStorage();
+  if (!storage) return;
+
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Le stockage peut être indisponible ou bloqué par le navigateur.
+  }
+};
+
+export const getAccessToken = () => readSessionValue(ACCESS_TOKEN_KEY);
+
+export const getRefreshToken = () => readSessionValue(REFRESH_TOKEN_KEY);
+
+export const hasStoredTokens = () => Boolean(getAccessToken());
+
+export const getAuthSessionVersion = () => authSessionVersion;
+
+const notifyAuthStateListeners = (reason) => {
+  const snapshot = {
+    reason,
+    version: authSessionVersion,
+    isAuthenticated: hasStoredTokens(),
+  };
+
+  authStateListeners.forEach((listener) => {
+    try {
+      listener(snapshot);
+    } catch {
+      // Un observateur défaillant ne doit pas interrompre la gestion de session.
+    }
+  });
+};
+
+export const subscribeAuthState = (listener) => {
+  if (typeof listener !== "function") {
+    return () => {};
+  }
+
+  authStateListeners.add(listener);
+
+  return () => {
+    authStateListeners.delete(listener);
+  };
+};
+
+const advanceAuthSession = () => {
+  authSessionVersion += 1;
+  return authSessionVersion;
+};
+
+const isCurrentAuthSession = (version) => version === authSessionVersion;
+
+const storeTokens = ({ access, refresh } = {}, reason = "tokens-updated") => {
+  if (access) {
+    writeSessionValue(ACCESS_TOKEN_KEY, access);
+  } else {
+    removeSessionValue(ACCESS_TOKEN_KEY);
+  }
+
+  if (refresh) {
+    writeSessionValue(REFRESH_TOKEN_KEY, refresh);
+  } else {
+    removeSessionValue(REFRESH_TOKEN_KEY);
+  }
+
+  notifyAuthStateListeners(reason);
+};
+
+const removeTokens = (reason = "tokens-cleared") => {
+  removeSessionValue(ACCESS_TOKEN_KEY);
+  removeSessionValue(REFRESH_TOKEN_KEY);
+  notifyAuthStateListeners(reason);
+};
+
+export const setTokens = ({ access, refresh } = {}) => {
+  advanceAuthSession();
+  storeTokens({ access, refresh });
+};
+
+export const clearTokens = (reason = "tokens-cleared") => {
+  advanceAuthSession();
+  removeTokens(reason);
+};
+
+const clearTokensIfCurrent = (accessToken, reason) => {
+  if (!accessToken || getAccessToken() !== accessToken) return false;
+
+  clearTokens(reason);
+  return true;
+};
+
+const assertCurrentAuthOperation = (operationVersion) => {
+  if (!isCurrentAuthSession(operationVersion)) {
+    throw new StaleSessionError();
+  }
+};
+
+const isStaleAuthenticatedRequest = (config) => {
+  const requestAccessToken = config?.nazekAccessToken;
+  const requestSessionVersion = config?.nazekSessionVersion;
+
+  if (!requestAccessToken) return false;
+
+  return (
+    requestSessionVersion !== authSessionVersion ||
+    requestAccessToken !== getAccessToken()
+  );
 };
 
 api.interceptors.request.use(
   (config) => {
+    const nextConfig = config;
+    const skipAuth = nextConfig.skipAuth === true;
+
+    delete nextConfig.skipAuth;
+
+    if (skipAuth) {
+      nextConfig.nazekAccessToken = null;
+      nextConfig.nazekSessionVersion = authSessionVersion;
+      return nextConfig;
+    }
+
     const token = getAccessToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
+
+    nextConfig.nazekAccessToken = token;
+    nextConfig.nazekSessionVersion = authSessionVersion;
+
+    if (token) {
+      nextConfig.headers = nextConfig.headers || {};
+      nextConfig.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return nextConfig;
   },
   (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => {
+    if (isStaleAuthenticatedRequest(response.config)) {
+      return Promise.reject(new StaleSessionError());
+    }
+
+    return response;
+  },
+  (error) => {
+    if (isStaleAuthenticatedRequest(error.config)) {
+      return Promise.reject(new StaleSessionError());
+    }
+
+    if (error.response?.status === 401) {
+      const requestAccessToken = error.config?.nazekAccessToken;
+
+      if (requestAccessToken) {
+        clearTokensIfCurrent(requestAccessToken, "session-expired");
+      }
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 const isLikelyHtml = (value) => {
@@ -70,6 +264,10 @@ export const apiRequest = async (url, options = {}) => {
     const response = await api({ url, ...options });
     return response.data;
   } catch (error) {
+    if (isStaleSessionError(error)) {
+      throw error;
+    }
+
     const status = error.response?.status;
     const data = error.response?.data;
     const message =
@@ -175,43 +373,63 @@ export const PAYMENT_URLS = {
 
 export const authAPI = {
   login: async (credentials) => {
+    const operationVersion = advanceAuthSession();
+    removeTokens("account-change-started");
+
     const response = await apiRequest(AUTH_URLS.LOGIN, {
       method: "POST",
       data: credentials,
+      skipAuth: true,
     });
+
+    assertCurrentAuthOperation(operationVersion);
 
     const access = response?.access || response?.tokens?.access;
     const refresh = response?.refresh || response?.tokens?.refresh;
-    setTokens({ access, refresh });
 
+    storeTokens({ access, refresh }, "login-succeeded");
     return response;
   },
 
   register: async (userData) => {
+    const operationVersion = advanceAuthSession();
+    removeTokens("account-change-started");
+
     const response = await apiRequest(AUTH_URLS.REGISTER, {
       method: "POST",
       data: userData,
+      skipAuth: true,
     });
+
+    assertCurrentAuthOperation(operationVersion);
 
     const access = response?.access || response?.tokens?.access;
     const refresh = response?.refresh || response?.tokens?.refresh;
-    setTokens({ access, refresh });
 
+    storeTokens({ access, refresh }, "registration-succeeded");
     return response;
   },
 
   logout: async (refresh) => {
+    const accessToken = getAccessToken();
     const refreshToken = refresh || getRefreshToken();
-    try {
-      if (refreshToken) {
-        await apiRequest(AUTH_URLS.LOGOUT, {
-          method: "POST",
-          data: { refresh: refreshToken },
-        });
-      }
-    } finally {
-      clearTokens();
-    }
+
+    clearTokens("logout");
+
+    if (!refreshToken) return;
+
+    const headers = accessToken
+      ? {
+          Authorization: `Bearer ${accessToken}`,
+        }
+      : undefined;
+
+    await apiRequest(AUTH_URLS.LOGOUT, {
+      method: "POST",
+      data: { refresh: refreshToken },
+      headers,
+      skipAuth: true,
+    });
   },
 
   getUser: () => apiRequest(AUTH_URLS.USER),
@@ -219,8 +437,17 @@ export const authAPI = {
   putUser: (data) => apiRequest(AUTH_URLS.USER, { method: "PUT", data }),
   getProfiles: () => apiRequest(AUTH_URLS.PROFILES),
   deleteMe: async () => {
+    const accessToken = getAccessToken();
+    const sessionVersion = getAuthSessionVersion();
     const res = await apiRequest(AUTH_URLS.USER, { method: "DELETE" });
-    clearTokens();
+
+    if (
+      isCurrentAuthSession(sessionVersion) &&
+      accessToken === getAccessToken()
+    ) {
+      clearTokens("account-deleted");
+    }
+
     return res;
   },
 };
@@ -233,7 +460,11 @@ export const userAPI = {
   getProfile: async () => {
     try {
       return await apiRequest(EMPLOYER_URLS.PROFILE);
-    } catch {
+    } catch (error) {
+      if (isStaleSessionError(error)) {
+        throw error;
+      }
+
       return apiRequest(CLIENT_URLS.PROFILE);
     }
   },
@@ -245,9 +476,14 @@ export const userAPI = {
     if (roleHint === "client") {
       return apiRequest(CLIENT_URLS.PROFILE, { method: "PATCH", data });
     }
+
     try {
       return await apiRequest(EMPLOYER_URLS.UPDATE, { method: "PATCH", data });
-    } catch {
+    } catch (error) {
+      if (isStaleSessionError(error)) {
+        throw error;
+      }
+
       return apiRequest(CLIENT_URLS.PROFILE, { method: "PATCH", data });
     }
   },
